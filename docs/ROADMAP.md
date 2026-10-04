@@ -12,14 +12,15 @@ Becslés esti munkára (heti ~6–8 óra). Minden mérföldkő végén legyen va
 - Füstteszt: mindhárom pálya végigjátszva a megoldóval, halál nélkül.
 - Hátra van: webes build telefonra (export sablonok + itch.io / Pages), ez az M5 része lett.
 
-## M3 – Érzés (1–2 hét)
-- Animációk (egér futás, halálok), részecskék, kamera-rázás, hangok, rezgés telefonon.
-- Halálüzenetek, menü, pályaválasztó, mentés (`user://`).
+## M3 – Érzés (1–2 hét) – részben kész
+- ✅ (2026-10-04) Végleges látvány: „Labornapló” (GDD), betűk, tollal húzott gombok.
+- ✅ Nyitó animáció, főmenü, pályaválasztó pipával és legjobb idővel, haladás mentése (`user://progress.json`), globális alany-sorszám.
+- Hátra: hangok, rezgés telefonon, halál-animációk finomítása.
 - **Kész, ha:** egy haver magától, magyarázat nélkül elindul vele.
 
 ## M4 – Pályák (2–3 hét)
 - 15 pálya növekvő nehézséggel, minden elem előbb biztonságosan jelenik meg, aztán szívat. Bence a szerkesztőben rajzolja őket.
-- Szerkesztő-bővítések igény szerint: visszavonás, pálya másolása, pályasorrend állítása.
+- ✅ (2026-10-04) Szerkesztő-bővítések: visszavonás/újra, folyosóvágó eszköz, generált labirintus, kitöltés, másolat, törlés, sorrend, JSON beillesztés, mentetlen-változás figyelmeztetés, ikonos eszköztár.
 - **Kész, ha:** 15 pálya, mind megoldható, átlag halálszám mérve.
 
 ## M5 – Teszt (most következik)

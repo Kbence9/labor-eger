@@ -3,8 +3,13 @@ extends RefCounted
 ## A pálya kirajzolása bármely CanvasItem-re (játék és szerkesztő közös).
 ## Pöttyös papír, kézzel húzott falak, tárgyak, egér.
 
-const PAPER := Color("f6f7f2")
-const BG := Color("edf0ea")
+const PAPER := Color("f6f7f2")      # a pálya lapja
+const BG := Color("e6ebdf")         # a füzetoldal (halvány mérnöki zöld)
+const PAGE_DOT := Color("b9c3b4")   # pöttyök a füzetoldalon
+const PEN := Color("2b3f9e")        # golyóstoll: gombok, kézírásos értékek
+const HIGHLIGHT := Color("f5e54b", 0.85)  # szövegkiemelő: fő gomb, kijelölt eszköz
+const MARGIN := Color("d98a82")     # margóvonal
+const HOLE := Color("2a2d33")       # lyukasztás a lap szélén
 const INK := Color("1e2233")
 const INK_SOFT := Color("5d6577")
 const RULE := Color("c9d0cf")
@@ -131,6 +136,24 @@ func draw_board(ci: CanvasItem, s: GameState, t: float, opts: Dictionary = {}) -
 		draw_cheese(ci, center(Vector2(c)), cell * 0.32)
 	for c in s.fires:
 		draw_fire(ci, center(Vector2(c)) + Vector2(0, cell * 0.05), cell * 0.36, t)
+	if opts.get("tape", true):
+		draw_tape(ci)
+
+
+## Ragasztószalag a lap két felső sarkán (a pálya egy füzetbe ragasztott lap).
+func draw_tape(ci: CanvasItem) -> void:
+	var tw := clampf(cell * 1.5, 46.0, 96.0)
+	var th := tw * 0.36
+	for k in [[sheet.position, -0.75], [Vector2(sheet.end.x, sheet.position.y), 0.75]]:
+		var p: Vector2 = k[0]
+		ci.draw_set_transform(p, k[1], Vector2.ONE)
+		var r := Rect2(Vector2(-tw / 2.0, -th / 2.0), Vector2(tw, th))
+		ci.draw_rect(r, Color(0.89, 0.83, 0.64, 0.8))
+		ci.draw_rect(r, Color(0.7, 0.62, 0.42, 0.35), false, 1.5)
+		for i in 5:
+			var x := r.position.x + r.size.x * (i + 0.5) / 5.0
+			ci.draw_line(Vector2(x, r.position.y), Vector2(x + 2, r.end.y), Color(1, 1, 1, 0.18), 2.0)
+		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw_walls(ci: CanvasItem, s: GameState) -> void:
@@ -214,12 +237,16 @@ func draw_arrow(ci: CanvasItem, c: Vector2i, side: String, col: Color, inward: b
 	var dv := Vector2(LevelData.DIRS[side])
 	var base := center(Vector2(c)) + dv * cell * 0.95
 	var ang := dv.angle() + (PI if inward else 0.0)
-	var s1 := cell * 0.32
+	arrow_shape(ci, base, ang, cell * 0.32, col, maxf(2.0, cell * 0.07))
+
+
+## Körvonalas nyíl (start/kijárat jele, ikonok)
+static func arrow_shape(ci: CanvasItem, base: Vector2, ang: float, s1: float, col: Color, w: float) -> void:
 	var local := PackedVector2Array([Vector2(-s1, -s1 * .35), Vector2(s1 * .1, -s1 * .35), Vector2(s1 * .1, -s1 * .8), Vector2(s1, 0), Vector2(s1 * .1, s1 * .8), Vector2(s1 * .1, s1 * .35), Vector2(-s1, s1 * .35), Vector2(-s1, -s1 * .35)])
 	var pts := PackedVector2Array()
 	for q in local:
 		pts.append(base + q.rotated(ang))
-	ci.draw_polyline(pts, col, maxf(2.0, cell * 0.07), true)
+	ci.draw_polyline(pts, col, w, true)
 
 
 func draw_bricks(ci: CanvasItem, a: Vector2, b: Vector2) -> void:
@@ -342,12 +369,12 @@ func draw_hole(ci: CanvasItem, p: Vector2) -> void:
 	ci.draw_colored_polygon(ellipse(p + Vector2(0, cell * .05), cell * .3, cell * .24), Color("0d0e10"))
 
 
-func draw_mouse(ci: CanvasItem, p: Vector2, dir: String, t: float, held: String, dead: bool, scale: float = 1.0) -> void:
+func draw_mouse(ci: CanvasItem, p: Vector2, dir: String, t: float, held: String, dead: bool, scale: float = 1.0, stretch: Vector2 = Vector2.ONE) -> void:
 	var ang := Vector2(LevelData.DIRS.get(dir, Vector2i(0, -1))).angle()
 	var r := cell * 0.3
 	var a := 0.55 if dead else 1.0
 	var line := maxf(1.3, r * 0.09)
-	ci.draw_set_transform(p, ang, Vector2.ONE * scale)
+	ci.draw_set_transform(p, ang, Vector2.ONE * scale * stretch)
 	# farok
 	var tail := PackedVector2Array()
 	for i in 9:

@@ -1,18 +1,33 @@
 class_name LabEditor
 extends Node2D
-## Pályaszerkesztő. Falat pöttytől pöttyig húzva rajzolsz (mint papíron), objektumot koppintással teszel le.
-## Ellenőrzés: a megoldó megmondja, megoldható-e, és megrajzolja a legrövidebb utat.
+## Pályaszerkesztő. Falat pöttytől pöttyig húzva rajzolsz (mint papíron), folyosót cellán át húzva vágsz,
+## objektumot koppintással teszel le. Visszavonás/újra, generált labirintus, kitöltés, másolat, törlés,
+## JSON másolás/beillesztés. Ellenőrzés: a megoldó megmondja, megoldható-e, és megrajzolja a legrövidebb utat.
 
 signal test_requested(level: LevelData)
 signal back_requested
 
-const TOP_H := 200.0
-const BOTTOM_H := 440.0
+const TOP_H := 196.0
+const BOTTOM_H := 372.0
 const TOOLS := [
-	["wall", "Fal"], ["brk", "Tégla"], ["erase", "Radír"], ["S", "Start"],
-	["E", "Kijárat"], ["H", "Kalapács"], ["W", "Víz"], ["F", "Tűz"],
-	["C", "Repedés"], ["T", "Sajt"], ["A", "Portál A"], ["B", "Portál B"],
+	["wall", "Fal"], ["brk", "Tégla"], ["carve", "Folyosó"], ["erase", "Radír"], ["S", "Start"], ["E", "Kijárat"], ["H", "Kalapács"],
+	["W", "Víz"], ["F", "Tűz"], ["C", "Repedés"], ["T", "Sajt"], ["A", "Portál A"], ["B", "Portál B"],
 ]
+const HINTS := {
+	"wall": "Fal: húzd pöttytől pöttyig. Meglévő falon kezdve töröl.",
+	"brk": "Tégla: áttörhető fal, kalapáccsal megy át rajta az egér.",
+	"carve": "Folyosó: húzd az ujjad cellán át, kinyitja a falakat az útvonalon.",
+	"erase": "Radír: falat nyit (húzva), tárgyat töröl (koppintva).",
+	"S": "Start: koppints egy cellára. Csak egy lehet.",
+	"E": "Kijárat: koppints egy cellára. Csak egy lehet.",
+	"H": "Kalapács: áttöri a téglafalat, nem kopik el.",
+	"W": "Víz: egyszer eloltja a tüzet.",
+	"F": "Tűz: víz nélkül halál.",
+	"C": "Repedés: átfutva beszakad, megállva lezuhansz.",
+	"T": "Sajt: csapda. Ingyen sajt csak az egérfogóban van.",
+	"A": "Portál A: két vége kell, oda-vissza visz.",
+	"B": "Portál B: két vége kell, oda-vissza visz.",
+}
 
 var library: LevelLibrary
 var level: LevelData
@@ -21,10 +36,13 @@ var dirty := false
 var tool := "wall"
 var painter := BoardPainter.new()
 var solution: Array[Vector2i] = []
+var history := EditHistory.new()
 var now := 0.0
 
 var _anchor := Vector2i(-999, -999)
 var _stroke_mode := ""
+var _stroke_recorded := false
+var _carve_last := Vector2i(-999, -999)
 var _press_pos := Vector2.INF
 var _dragged := false
 
@@ -32,6 +50,9 @@ var _ui: Control
 var _name_edit: LineEdit
 var _size_lbl: Label
 var _status: Label
+var _btn_undo: IconButton
+var _btn_redo: IconButton
+var _tool_buttons := {}
 
 
 func _ready() -> void:
@@ -44,10 +65,11 @@ func open_level(L: LevelData, file: String) -> void:
 	file_name = file
 	dirty = false
 	solution.clear()
+	history.clear()
 	painter.seed = L.id + 1
 	_name_edit.text = L.title
 	_refresh()
-	_set_status("Falat húzással rajzolsz pöttytől pöttyig. Tárgyat koppintással teszel le.")
+	_select_tool(tool)
 
 
 func _layout() -> void:
@@ -59,6 +81,7 @@ func _layout() -> void:
 
 func _refresh() -> void:
 	_size_lbl.text = "%d × %d" % [level.cols, level.rows]
+	_update_history_buttons()
 	_layout()
 	queue_redraw()
 
@@ -67,12 +90,31 @@ func _changed() -> void:
 	dirty = true
 	solution.clear()
 	level.rebuild()
+	_update_history_buttons()
 	queue_redraw()
+
+
+func _update_history_buttons() -> void:
+	_btn_undo.disabled = not history.can_undo()
+	_btn_redo.disabled = not history.can_redo()
+	_btn_undo.queue_redraw()
+	_btn_redo.queue_redraw()
 
 
 func _set_status(t: String, col: Color = BoardPainter.INK_SOFT) -> void:
 	_status.text = t
 	_status.add_theme_color_override("font_color", col)
+
+
+## Módosítás előtt: egy húzás / koppintás / művelet = egy visszavonható lépés.
+func _begin_change() -> void:
+	if not _stroke_recorded:
+		history.record(level)
+		_stroke_recorded = true
+
+
+func _record() -> void:
+	history.record(level)
 
 
 # ---------- rajzolás ----------
@@ -85,15 +127,34 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	if level == null:
 		return
+	var vs := get_viewport_rect().size
+	Notebook.page(self, Rect2(Vector2.ZERO, vs), 0.0, 0.0, false)
 	var s := GameState.from_level(level)
 	painter.draw_board(self, s, now, {"path": solution})
 	if _anchor.x > -999:
 		draw_circle(painter.dot_pos(_anchor), painter.cell * 0.14, Color(BoardPainter.EXIT, 0.6))
+	if tool == "carve" and _carve_last.x > -999 and level.in_bounds(_carve_last):
+		draw_circle(painter.center(Vector2(_carve_last)), painter.cell * 0.16, Color(BoardPainter.OK, 0.6))
 
 
 # ---------- input ----------
 func _unhandled_input(e: InputEvent) -> void:
 	if not visible or level == null:
+		return
+	if e is InputEventKey and e.pressed and not e.echo and (e.ctrl_pressed or e.meta_pressed):
+		match e.keycode:
+			KEY_Z:
+				if e.shift_pressed:
+					redo()
+				else:
+					undo()
+			KEY_Y:
+				redo()
+			KEY_S:
+				_save()
+			_:
+				return
+		get_viewport().set_input_as_handled()
 		return
 	if e is InputEventScreenTouch:
 		if e.pressed:
@@ -112,14 +173,23 @@ func _press(p: Vector2) -> void:
 	_press_pos = p
 	_dragged = false
 	_stroke_mode = ""
+	_stroke_recorded = false
 	_anchor = Vector2i(-999, -999)
+	_carve_last = Vector2i(-999, -999)
 	if _is_line_tool():
 		var d := painter.nearest_dot(p)
 		if p.distance_to(painter.dot_pos(d)) < painter.cell * 0.45 and _dot_ok(d):
 			_anchor = d
+	elif tool == "carve":
+		var c := painter.cell_at(p)
+		if level.in_bounds(c):
+			_carve_last = c
 
 
 func _drag(p: Vector2) -> void:
+	if tool == "carve":
+		_carve_to(painter.cell_at(p))
+		return
 	if _anchor.x <= -999:
 		return
 	var d := painter.nearest_dot(p)
@@ -136,9 +206,28 @@ func _drag(p: Vector2) -> void:
 	_dragged = true
 
 
+## Folyosóvágás: az előző cellától a mostaniig (gyors húzásnál lépésenként) kinyitja a falakat.
+func _carve_to(c: Vector2i) -> void:
+	if _carve_last.x <= -999 or not level.in_bounds(c) or c == _carve_last:
+		return
+	var guard := 0
+	while c != _carve_last and guard < 64:
+		guard += 1
+		var diff := c - _carve_last
+		var step := Vector2i(signi(diff.x), 0) if absi(diff.x) >= absi(diff.y) else Vector2i(0, signi(diff.y))
+		var n := _carve_last + step
+		if level.edge_kind(_carve_last, n) != "open":
+			_begin_change()
+			level.set_edge(_carve_last, n, "open")
+			_changed()
+		_carve_last = n
+	_dragged = true
+
+
 func _release(p: Vector2) -> void:
 	var was_tap := not _dragged and _press_pos != Vector2.INF and p.distance_to(_press_pos) < painter.cell * 0.3
 	_anchor = Vector2i(-999, -999)
+	_carve_last = Vector2i(-999, -999)
 	_press_pos = Vector2.INF
 	if was_tap:
 		_tap(p)
@@ -150,6 +239,8 @@ func _dot_ok(d: Vector2i) -> bool:
 
 
 func _tap(p: Vector2) -> void:
+	if tool == "carve":
+		return
 	var q := (p - painter.origin) / painter.cell
 	if _is_line_tool():
 		var seg := _nearest_segment(q)
@@ -164,6 +255,7 @@ func _tap(p: Vector2) -> void:
 		return
 	if tool == "erase":
 		if level.objects.has(c):
+			_record()
 			level.objects.erase(c)
 			_changed()
 		return
@@ -220,11 +312,13 @@ func _apply_segment(a: Vector2i, b: Vector2i) -> void:
 			_:
 				_stroke_mode = "open"
 	if cur != _stroke_mode:
+		_begin_change()
 		level.set_edge(cells[0], cells[1], _stroke_mode)
 		_changed()
 
 
 func _place(c: Vector2i, code: String) -> void:
+	_record()
 	if level.objects.get(c, "") == code:
 		level.objects.erase(c)
 		_changed()
@@ -245,26 +339,73 @@ func _place(c: Vector2i, code: String) -> void:
 
 
 # ---------- műveletek ----------
+func undo() -> void:
+	var L := history.undo(level)
+	if L == null:
+		_set_status("Nincs mit visszavonni.")
+		return
+	_restore(L)
+	_set_status("Visszavonva.")
+
+
+func redo() -> void:
+	var L := history.redo(level)
+	if L == null:
+		_set_status("Nincs mit újra megcsinálni.")
+		return
+	_restore(L)
+	_set_status("Újra megcsinálva.")
+
+
+func _restore(L: LevelData) -> void:
+	L.title = _name_edit.text.strip_edges()
+	level = L
+	dirty = true
+	solution.clear()
+	_refresh()
+
+
 func _resize(dc: int, dr: int) -> void:
+	_record()
 	level.resize(level.cols + dc, level.rows + dr)
 	_changed()
 	_refresh()
 
 
-func _check() -> void:
+func _generate() -> void:
+	_record()
+	MazeGen.carve(level, randi(), 0.08)
+	_changed()
+	_check()
+	if not solution.is_empty():
+		_set_status("Új labirintus. " + _status.text + " Nyomd meg újra egy másikért.", BoardPainter.OK)
+
+
+func _fill(walls: bool) -> void:
+	_record()
+	MazeGen.fill(level, walls)
+	_changed()
+	_set_status("Minden él fal. Vágj folyosót a Folyosó eszközzel." if walls else "Minden él nyitott. Rajzolj falakat!")
+	if walls:
+		_select_tool("carve")
+
+
+func _check() -> bool:
 	level.title = _name_edit.text.strip_edges()
 	var errs := level.validate()
 	if not errs.is_empty():
 		_set_status("Nem játszható: " + " ".join(errs), BoardPainter.MARK)
-		return
+		return false
 	var path := Solver.solve(level)
 	if path.is_empty():
 		solution.clear()
 		_set_status("Nem megoldható. (Vagy túl bonyolult a megoldónak.)", BoardPainter.MARK)
-	else:
-		solution = Solver.path_cells(level, path)
-		_set_status("Megoldható. A legrövidebb út %d lépés (zölddel)." % path.size(), BoardPainter.OK)
+		queue_redraw()
+		return false
+	solution = Solver.path_cells(level, path)
+	_set_status("Megoldható. A legrövidebb út %d lépés (zölddel)." % path.size(), BoardPainter.OK)
 	queue_redraw()
+	return true
 
 
 func _test() -> void:
@@ -276,17 +417,22 @@ func _test() -> void:
 	test_requested.emit(level.copy())
 
 
-func _save() -> void:
+func _save() -> bool:
 	level.title = _name_edit.text.strip_edges()
 	if file_name == "":
 		file_name = library.next_file_name()
 	var path := library.save_level(level, file_name)
 	if path == "":
-		_set_status("Mentés sikertelen.", BoardPainter.MARK)
-		return
+		_set_status("A mentés nem sikerült.", BoardPainter.MARK)
+		return false
 	dirty = false
 	var where := "a repóba" if path.begins_with("res://") else "erre az eszközre"
-	_set_status("Mentve %s: %s" % [where, path], BoardPainter.OK)
+	var ok := level.validate().is_empty() and not Solver.solve(level).is_empty()
+	if ok:
+		_set_status("Mentve %s (%s). Megoldható." % [where, file_name], BoardPainter.OK)
+	else:
+		_set_status("Mentve %s (%s), de még NEM megoldható!" % [where, file_name], BoardPainter.MARK)
+	return true
 
 
 func _copy() -> void:
@@ -295,9 +441,104 @@ func _copy() -> void:
 	_set_status("A pálya JSON-ja a vágólapon. Bemásolhatod egy chatbe vagy fájlba.", BoardPainter.OK)
 
 
-func _new() -> void:
+func paste_json(txt: String) -> bool:
+	var L := LevelLibrary.parse(txt)
+	if L == null:
+		_set_status("A vágólapon nincs pálya (JSON-t vártam).", BoardPainter.MARK)
+		return false
+	_record()
+	L.title = L.title if L.title != "" else "Beillesztett pálya"
+	level = L
+	_name_edit.text = L.title
+	dirty = true
+	solution.clear()
+	_refresh()
+	_set_status("Beillesztve. Mentéskor felülírja ezt a pályát; ha újként kell, előbb készíts másolatot.", BoardPainter.OK)
+	return true
+
+
+func _duplicate() -> void:
+	if file_name == "" or dirty:
+		if not _save():
+			return
+	var nf := library.duplicate_level(file_name, level)
+	if nf == "":
+		_set_status("A másolat nem sikerült.", BoardPainter.MARK)
+		return
+	var L := library.load_level(LevelLibrary.write_dir() + "/" + nf)
+	open_level(L, nf)
+	_set_status("Másolat kész: %s. Most ezt szerkeszted." % nf, BoardPainter.OK)
+
+
+func _delete() -> void:
+	if file_name == "":
+		_new_blank()
+		return
+	var err := library.delete_level(file_name)
+	if err != "":
+		_set_status(err, BoardPainter.MARK)
+		return
+	dirty = false
+	back_requested.emit()
+
+
+func _new_blank() -> void:
 	open_level(LevelData.new_empty(7, 9), "")
-	_set_status("Új üres pálya. Rajzold meg a falakat!")
+	_set_status("Új üres pálya. Rajzold meg a falakat, vagy generálj labirintust a jobb felső menüben.")
+
+
+## Kilépés / új pálya előtt: ha van mentetlen változás, rákérdez.
+func _guard(then: Callable) -> void:
+	if not dirty:
+		then.call()
+		return
+	var nm := _name_edit.text.strip_edges()
+	var save_then := func() -> void:
+		if _save():
+			then.call()
+	var drop_then := func() -> void:
+		dirty = false
+		then.call()
+	UiKit.modal(_ui, "Mentetlen változások", "A(z) „%s” pályán módosítottál. Mi legyen vele?" % nm, [
+		["Mentés", save_then, "primary"],
+		["Eldobom a változásokat", drop_then, "ink"],
+		["Mégse", Callable(), "text"],
+	])
+
+
+func request_back() -> void:
+	_guard(func(): back_requested.emit())
+
+
+func _open_menu() -> void:
+	var opts: Array = [
+		["Labirintus generálása", _generate, "text"],
+		["Minden él fal (utána folyosót vágsz)", func(): _fill(true), "text"],
+		["Minden él nyitott (utána falat rajzolsz)", func(): _fill(false), "text"],
+		["Másolat készítése", _duplicate, "text"],
+		["Pálya JSON másolása", _copy, "text"],
+		["JSON beillesztése a vágólapról", func(): paste_json(DisplayServer.clipboard_get()), "text"],
+		["Új üres pálya", func(): _guard(_new_blank), "text"],
+	]
+	if file_name != "":
+		opts.append(["Pálya törlése…", _confirm_delete, "text"])
+	opts.append(["Mégse", Callable(), "ink"])
+	UiKit.modal(_ui, "Pálya", "", opts)
+
+
+func _confirm_delete() -> void:
+	UiKit.modal(_ui, "Biztosan törlöd?", "„%s” (%s) végleg törlődik. Visszavonni nem lehet." % [_name_edit.text.strip_edges(), file_name], [
+		["Törlés", _delete, "primary"],
+		["Mégse", Callable(), "text"],
+	])
+
+
+func _select_tool(id: String) -> void:
+	tool = id
+	for k in _tool_buttons:
+		_tool_buttons[k].set_pressed_no_signal(k == id)
+		_tool_buttons[k].queue_redraw()
+	_set_status(HINTS[id])
 
 
 # ---------- UI ----------
@@ -311,70 +552,78 @@ func _build_ui() -> void:
 
 	var top := VBoxContainer.new()
 	top.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	top.offset_left = 24
-	top.offset_right = -24
-	top.offset_top = 24
-	top.add_theme_constant_override("separation", 12)
+	top.offset_left = 20
+	top.offset_right = -20
+	top.offset_top = 22
+	top.add_theme_constant_override("separation", 10)
 	_ui.add_child(top)
 	var row1 := HBoxContainer.new()
-	row1.add_theme_constant_override("separation", 12)
+	row1.add_theme_constant_override("separation", 10)
+	row1.add_child(IconButton.make("back", "", request_back))
 	_name_edit = LineEdit.new()
 	_name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_name_edit.placeholder_text = "Pálya neve"
-	_name_edit.custom_minimum_size = Vector2(0, 70)
+	_name_edit.placeholder_text = "A pálya neve"
+	_name_edit.custom_minimum_size = Vector2(0, 72)
 	_name_edit.text_changed.connect(func(_t): dirty = true)
 	row1.add_child(_name_edit)
-	row1.add_child(UiKit.button("Új", _new))
+	_btn_undo = IconButton.make("undo", "", undo)
+	_btn_undo.tooltip_text = "Visszavonás (Ctrl+Z)"
+	_btn_redo = IconButton.make("redo", "", redo)
+	_btn_redo.tooltip_text = "Újra (Ctrl+Y)"
+	row1.add_child(_btn_undo)
+	row1.add_child(_btn_redo)
+	row1.add_child(IconButton.make("menu", "", _open_menu))
 	top.add_child(row1)
 	var row2 := HBoxContainer.new()
-	row2.add_theme_constant_override("separation", 10)
-	row2.add_child(UiKit.label("Méret", 26, BoardPainter.INK_SOFT))
-	row2.add_child(UiKit.button("Szél −", func(): _resize(-1, 0)))
-	row2.add_child(UiKit.button("Szél +", func(): _resize(1, 0)))
-	_size_lbl = UiKit.label("7 × 9", 28)
+	row2.add_theme_constant_override("separation", 8)
+	row2.alignment = BoxContainer.ALIGNMENT_CENTER
+	row2.add_child(UiKit.label("Szélesség", 26, BoardPainter.INK_SOFT))
+	row2.add_child(IconButton.make("minus", "", func(): _resize(-1, 0), Vector2(62, 62)))
+	row2.add_child(IconButton.make("plus", "", func(): _resize(1, 0), Vector2(62, 62)))
+	_size_lbl = UiKit.label("7 × 9", 30, BoardPainter.PEN, "bold")
 	_size_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_size_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	row2.add_child(_size_lbl)
-	row2.add_child(UiKit.button("Mag −", func(): _resize(0, -1)))
-	row2.add_child(UiKit.button("Mag +", func(): _resize(0, 1)))
+	row2.add_child(UiKit.label("Magasság", 26, BoardPainter.INK_SOFT))
+	row2.add_child(IconButton.make("minus", "", func(): _resize(0, -1), Vector2(62, 62)))
+	row2.add_child(IconButton.make("plus", "", func(): _resize(0, 1), Vector2(62, 62)))
 	top.add_child(row2)
 
 	var bottom := VBoxContainer.new()
 	bottom.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	bottom.offset_left = 24
-	bottom.offset_right = -24
-	bottom.offset_top = -BOTTOM_H + 10
-	bottom.offset_bottom = -20
-	bottom.add_theme_constant_override("separation", 12)
+	bottom.offset_left = 20
+	bottom.offset_right = -20
+	bottom.offset_top = -BOTTOM_H + 6
+	bottom.offset_bottom = -18
+	bottom.add_theme_constant_override("separation", 10)
 	_ui.add_child(bottom)
 	_status = UiKit.label("", 24, BoardPainter.INK_SOFT)
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_status.custom_minimum_size = Vector2(0, 66)
+	_status.custom_minimum_size = Vector2(0, 64)
+	_status.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	bottom.add_child(_status)
 	var grid := GridContainer.new()
-	grid.columns = 4
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 10)
-	var group := ButtonGroup.new()
+	grid.columns = 7
+	grid.add_theme_constant_override("h_separation", 6)
+	grid.add_theme_constant_override("v_separation", 6)
 	for t in TOOLS:
-		var b := UiKit.button(t[1])
-		b.toggle_mode = true
-		b.button_group = group
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.custom_minimum_size = Vector2(0, 66)
-		b.add_theme_font_size_override("font_size", 26)
-		b.button_pressed = t[0] == tool
 		var id: String = t[0]
-		b.pressed.connect(func(): tool = id)
+		var b := IconButton.make(id, t[1], Callable(), Vector2(0, 88))
+		b.toggle_mode = true
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.button_pressed = id == tool
+		b.pressed.connect(func(): _select_tool(id))
+		_tool_buttons[id] = b
 		grid.add_child(b)
 	bottom.add_child(grid)
 	var actions := HBoxContainer.new()
-	actions.add_theme_constant_override("separation", 10)
-	for a in [["Teszt", _test, true], ["Ellenőriz", _check, false], ["Mentés", _save, false], ["Másol", _copy, false], ["Vissza", func(): back_requested.emit(), false]]:
-		var b2 := UiKit.button(a[0], a[1], a[2])
+	actions.add_theme_constant_override("separation", 12)
+	for a in [["Teszt", _test, "primary"], ["Ellenőriz", _check, "ink"], ["Mentés", _save, "ink"]]:
+		var b2 := UiKit.button(a[0], Callable(), a[2])
+		var cb: Callable = a[1]
+		b2.pressed.connect(func(): cb.call())
 		b2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b2.add_theme_font_size_override("font_size", 25)
-		b2.add_theme_constant_override("h_separation", 0)
+		b2.add_theme_font_size_override("font_size", 32)
 		actions.add_child(b2)
 	bottom.add_child(actions)
 

@@ -4,6 +4,8 @@ extends Node2D
 
 signal back_requested
 signal next_requested
+signal died(why: String)
+signal won(seconds: float, deaths: int)
 
 const STEP_TIME := 0.085
 const CRACK_TIME := 0.45
@@ -24,6 +26,7 @@ var state: GameState
 var painter := BoardPainter.new()
 var test_mode := false
 var has_next := false
+var subject_base := 0   # az eddigi összes halál (a haladásból): az alany sorszáma ehhez adódik
 
 var disp := Vector2.ZERO
 var anim: Dictionary = {}
@@ -264,11 +267,12 @@ func _die(why: String) -> void:
 		shake = 10.0
 	var txt: Array = DEATH_TEXT[why]
 	var heads: Array = txt[0]
-	_toast_head.text = "Alany #%d %s" % [deaths, heads[randi() % heads.size()]]
+	_toast_head.text = "Alany #%d %s" % [subject_base + deaths, heads[randi() % heads.size()]]
 	_toast_note.text = txt[1]
 	_toast.visible = true
 	death_info = {"why": why, "t0": now}
 	_update_hud()
+	died.emit(why)
 
 
 func _finish_death() -> void:
@@ -290,6 +294,7 @@ func restart() -> void:
 func _on_win() -> void:
 	moving = false
 	t_end = now
+	won.emit(t_end - t_start, deaths)
 	_confetti(Vector2(state.pos))
 	await get_tree().create_timer(0.6).timeout
 	_win_title.text = level.title + " lezárva"
@@ -314,7 +319,7 @@ static func _fmt(sec: float) -> String:
 func _update_hud() -> void:
 	if _lbl_deaths:
 		_lbl_deaths.text = "Halál: %d" % deaths
-		_lbl_subject.text = "Alany #%d" % (deaths + 1)
+		_lbl_subject.text = "Alany #%d" % (subject_base + deaths + 1)
 
 
 # ---------- frame ----------
@@ -349,6 +354,7 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	if level == null:
 		return
+	Notebook.page(self, Rect2(Vector2.ZERO, get_viewport_rect().size), 0.0, 0.0, false)
 	var off := Vector2.ZERO
 	if shake > 0.2:
 		off = Vector2(randf() - 0.5, randf() - 0.5) * shake
@@ -463,8 +469,8 @@ func _build_ui() -> void:
 	var top := VBoxContainer.new()
 	top.position = Vector2(32, 30)
 	_ui.add_child(top)
-	_lbl_title = UiKit.label("", 40)
-	_lbl_subject = UiKit.label("Alany #1", 24, BoardPainter.INK_SOFT)
+	_lbl_title = UiKit.label("", 40, BoardPainter.INK, "bold")
+	_lbl_subject = UiKit.label("Alany #1", 24, BoardPainter.INK_SOFT, "type")
 	top.add_child(_lbl_title)
 	top.add_child(_lbl_subject)
 
@@ -477,9 +483,9 @@ func _build_ui() -> void:
 	stats.offset_bottom = 120
 	stats.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_ui.add_child(stats)
-	_lbl_time = UiKit.label("0:00.0", 34)
+	_lbl_time = UiKit.label("0:00.0", 34, BoardPainter.INK, "type")
 	_lbl_time.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_lbl_deaths = UiKit.label("Halál: 0", 26, BoardPainter.MARK)
+	_lbl_deaths = UiKit.label("Halál: 0", 28, BoardPainter.MARK, "bold")
 	_lbl_deaths.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	stats.add_child(_lbl_time)
 	stats.add_child(_lbl_deaths)
@@ -507,7 +513,7 @@ func _build_ui() -> void:
 	_toast.offset_bottom = -130
 	_toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var tv := VBoxContainer.new()
-	_toast_head = UiKit.label("", 32, BoardPainter.MARK)
+	_toast_head = UiKit.label("", 34, BoardPainter.MARK, "bold")
 	_toast_head.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_toast_note = UiKit.label("", 24, BoardPainter.INK_SOFT)
 	_toast_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -525,10 +531,12 @@ func _build_ui() -> void:
 	var wv := VBoxContainer.new()
 	wv.add_theme_constant_override("separation", 18)
 	card.add_child(wv)
-	wv.add_child(UiKit.label("SIKERES", 26, BoardPainter.OK))
-	_win_title = UiKit.label("", 40)
+	var st := UiKit.stamp("SIKERES", BoardPainter.OK, 54, -4.0)
+	st.custom_minimum_size = Vector2(0, 74)
+	wv.add_child(st)
+	_win_title = UiKit.label("", 40, BoardPainter.INK, "bold")
 	_win_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_win_stats = UiKit.label("", 28)
+	_win_stats = UiKit.label("", 28, BoardPainter.INK, "type")
 	_win_note = UiKit.label("", 26, BoardPainter.INK_SOFT)
 	_win_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	wv.add_child(_win_title)
@@ -536,7 +544,7 @@ func _build_ui() -> void:
 	wv.add_child(_win_note)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 16)
-	_btn_next = UiKit.button("Következő", func(): next_requested.emit(), true)
+	_btn_next = UiKit.button("Következő", func(): next_requested.emit(), "primary")
 	row.add_child(_btn_next)
 	row.add_child(UiKit.button("Újra", func(): start(level, test_mode, has_next)))
 	row.add_child(UiKit.button("Vissza", func(): back_requested.emit()))

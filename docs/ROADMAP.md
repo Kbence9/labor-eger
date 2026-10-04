@@ -5,16 +5,12 @@ Becslés esti munkára (heti ~6–8 óra). Minden mérföldkő végén legyen va
 ## M0 – Alap ✅ (2026-10-04)
 - Repo, Godot-projekt váz, prototípus és 3 pálya JSON-ban, GDD, ütemterv.
 
-## M1 – Mag (1–2 hét)
-- `scripts/core/level.gd`: JSON betöltés, élek, `edge()`, `step()` – a prototípus `LabLogic` portja.
-- `scripts/core/solver.gd` + headless teszt: mindhárom pálya megoldható.
-- Rajzolás: pöttyös papír, falak, start/kijárat. Egér mozgás: swipe + billentyű, futás, kanyar-puffer.
-- **Kész, ha:** az 1. pálya végigjátszható Godotban, gépen és telefonon (webes build).
-
-## M2 – Mechanikák (1–2 hét)
-- Tárgyak és csere, kalapács + tégla, víz + tűz, repedt padló, portálok, sajt.
-- Halál, újrakezdés, X-jelölők, idő- és halálszámláló, győzelem képernyő.
-- **Kész, ha:** a prototípus mindhárom pályája ugyanúgy működik, mint a weben.
+## M1 + M2 – Mag és mechanikák ✅ (2026-10-04)
+- `scripts/core/`: `LevelData`, `GameState.step()`, `Solver` – a prototípus logikájának portja, headless teszttel.
+- Játék: pöttyös papír, falak, összes elem (kalapács, tégla, víz, tűz, repedés, portálok, sajt), futás + kanyar-puffer, swipe + billentyű, halál/újrakezdés, X-jelölők, számlálók, győzelem.
+- **Pályaszerkesztő** (előrehozva M4-ből): falrajzolás pöttytől pöttyig, tárgyak, méret, megoldhatóság-ellenőrzés útvonallal, teszt, mentés, JSON-másolás.
+- Füstteszt: mindhárom pálya végigjátszva a megoldóval, halál nélkül.
+- Hátra van: webes build telefonra (export sablonok + itch.io / Pages), ez az M5 része lett.
 
 ## M3 – Érzés (1–2 hét)
 - Animációk (egér futás, halálok), részecskék, kamera-rázás, hangok, rezgés telefonon.
@@ -22,12 +18,12 @@ Becslés esti munkára (heti ~6–8 óra). Minden mérföldkő végén legyen va
 - **Kész, ha:** egy haver magától, magyarázat nélkül elindul vele.
 
 ## M4 – Pályák (2–3 hét)
-- 15 pálya növekvő nehézséggel, minden elem előbb biztonságosan jelenik meg, aztán szívat.
-- Pályaszerkesztő (legalább gépen) + megoldhatóság-ellenőrzés.
+- 15 pálya növekvő nehézséggel, minden elem előbb biztonságosan jelenik meg, aztán szívat. Bence a szerkesztőben rajzolja őket.
+- Szerkesztő-bővítések igény szerint: visszavonás, pálya másolása, pályasorrend állítása.
 - **Kész, ha:** 15 pálya, mind megoldható, átlag halálszám mérve.
 
-## M5 – Teszt (M2-től folyamatosan)
-- Webes build privát itch.io oldalra, link a haveroknak.
+## M5 – Teszt (most következik)
+- Webes export (Godot export sablonok, egyszálas web build), privát itch.io oldalra, link a haveroknak.
 - Mérni: hol halnak meg, hol adják fel (halál-heatmap pályánként).
 
 ## M6 – Kiadás

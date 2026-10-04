@@ -15,7 +15,8 @@ Kísérleti egér egy kézzel rajzolt labirintusban: semmi magyarázat, sok hal�
 
 ## Pálya
 - Rács, a falak a cellák közötti éleken (pöttyös papír: pontok a sarkokon, vonalak a falak).
-- JSON: `size [C,R]`, `paths` (összekötött cellák sorozatai, minden más él fal), `breakable` (`"x,y|x,y"`), `objects` (`"x,y": kód`).
+- JSON: `size [C,R]`, nyitott élek `edges` (`"x,y|x,y"`, a szerkesztő ezt menti) és/vagy `paths` (összekötött cellák sorozatai, kézi íráshoz), `breakable` (`"x,y|x,y"`), `objects` (`"x,y": kód`). Minden nem nyitott él fal.
+- Pályák: `res://levels/*.json` (beépített, fájlnév szerinti sorrend) + `user://levels/*.json` (eszközön szerkesztett; azonos fájlnévnél felülírja a beépítettet).
 
 | Kód | Elem | Szabály |
 |---|---|---|

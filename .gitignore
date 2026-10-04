@@ -1,0 +1,17 @@
+# Godot
+.godot/
+/android/
+*.translation
+
+# Export kimenetek
+/build/
+/export/
+*.apk
+*.aab
+*.pck
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

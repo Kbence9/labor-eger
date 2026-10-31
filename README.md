@@ -10,7 +10,7 @@ a játékos halálokon keresztül tanul. Mobilra (Android, később iOS) és web
 
 ## Megnyitás
 
-1. Indítsd a **sima** Godotot: `D:\MyProjects\Godot_v4.7.2-stable_win64.exe` (nem a mono/C# verziót).
+1. Indítsd a **sima** Godot 4.7-et (nem a .NET/C# verziót). Letölthető innen: <https://godotengine.org/download>.
 2. Import → válaszd ki ezt a mappát (`project.godot`).
 3. F5: nyitó animáció (koppintásra átugorható), utána főmenü → **Kísérlet indítása** / **Pályák** / **Pályaszerkesztő**.
 

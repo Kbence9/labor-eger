@@ -1,0 +1,101 @@
+name: web-build-pages
+
+# Webes build (Godot 4.7, egyszálas: SharedArrayBuffer / COOP-COEP fejlécek nélkül is fut,
+# ezért GitHub Pages-en is) és telepítés GitHub Pages-re.
+# - push a main-re: export + telepítés
+# - pull request: csak export (ellenőrzés, hogy a build elkészül), telepítés nincs
+# - kézzel is indítható (Actions fül -> web-build-pages -> Run workflow)
+# Előfeltétel (egyszer, kézzel): Settings -> Pages -> Source: GitHub Actions.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GODOT_VERSION: "4.7-stable"
+
+jobs:
+  build:
+    name: Webes export (Godot 4.7, egyszálas)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Godot ${{ env.GODOT_VERSION }} letöltése (ellenőrzőösszeggel)
+        run: |
+          base="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}"
+          zip="Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          mkdir -p "$RUNNER_TEMP/godot" && cd "$RUNNER_TEMP/godot"
+          curl -fsSL --retry 4 -o "$zip" "$base/$zip"
+          curl -fsSL --retry 4 -o SHA512-SUMS.txt "$base/SHA512-SUMS.txt"
+          grep " $zip\$" SHA512-SUMS.txt | sha512sum -c -
+          unzip -q "$zip"
+          sudo ln -sf "$PWD/Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      # A teljes sablon-csomag ~1,3 GB; ebből csak a két webes (egyszálas) sablon kell, azt cache-eljük.
+      - name: Webes export sablonok (cache)
+        id: tpl-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.local/share/godot/export_templates
+          key: godot-web-templates-${{ env.GODOT_VERSION }}
+
+      - name: Webes export sablonok letöltése (ellenőrzőösszeggel)
+        if: steps.tpl-cache.outputs.cache-hit != 'true'
+        run: |
+          base="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}"
+          tpz="Godot_v${GODOT_VERSION}_export_templates.tpz"
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 4 -o "$tpz" "$base/$tpz"
+          curl -fsSL --retry 4 -o SHA512-SUMS.txt "$base/SHA512-SUMS.txt"
+          grep " $tpz\$" SHA512-SUMS.txt | sha512sum -c -
+          dest="$HOME/.local/share/godot/export_templates/${GODOT_VERSION/-/.}"
+          mkdir -p "$dest"
+          unzip -oqj "$tpz" templates/web_nothreads_release.zip templates/web_nothreads_debug.zip templates/version.txt -d "$dest"
+          rm "$tpz"
+          ls -la "$dest"
+
+      - name: Import (osztálynevek, betűk)
+        run: godot --headless --path . --import
+
+      - name: Webes export
+        run: |
+          mkdir -p build/web
+          godot --headless --path . --export-release "Web" build/web/index.html
+          test -s build/web/index.html && test -s build/web/index.pck && test -s build/web/index.wasm
+          grep -q "GODOT_THREADS_ENABLED = false" build/web/index.html
+          ls -la build/web
+
+      - name: Pages-artifact feltöltése
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: build/web
+
+  deploy:
+    name: Telepítés GitHub Pages-re
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Telepítés
+        id: deployment
+        uses: actions/deploy-pages@v5

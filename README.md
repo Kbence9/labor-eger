@@ -5,6 +5,7 @@
 Szívatós labirintusjáték egy kísérleti egérrel, „Labornapló” stílusban (pöttyös füzet, golyóstoll, piros pecsét). Nincs jelmagyarázat:
 a játékos halálokon keresztül tanul. Mobilra (Android, később iOS) és webre készül, Godot 4.7-ben.
 
+- **▶ Játszd a böngészőben: <https://kbence9.github.io/labor-eger/>** (telefonon is: húzd az ujjad)
 - **Játszható webes prototípus:** `prototype/labor-eger.html` (böngészőben megnyitható)
 - **Játékterv:** [docs/GDD.md](docs/GDD.md)
 - **Ütemterv:** [docs/ROADMAP.md](docs/ROADMAP.md)
@@ -34,6 +35,31 @@ Irányítás: húzd az ujjad (swipe) vagy nyilak / WASD; **R** újrakezdés, **E
 ![Seed kézzel, hibás bevitellel](docs/screenshots/veletlen_seed.png)
 
 Képernyőképek: `docs/screenshots/` (a füsttesztből: `user://shots/`, Linuxon `~/.local/share/godot/app_userdata/Labor Egér/shots/`).
+
+## Webes build és GitHub Pages
+
+A `.github/workflows/pages.yml` minden **main-re pusholáskor** exportálja a webes buildet, és telepíti GitHub Pages-re
+(`actions/deploy-pages`). Pull requestnél csak exportál (ellenőrzés), nem telepít; az Actions fülről kézzel is indítható.
+
+- **Egyszálas build** (`variant/thread_support=false` az `export_presets.cfg`-ben): nem kell SharedArrayBuffer, sem
+  COOP/COEP fejléc, ezért sima GitHub Pages-en is fut.
+- Mobilon a canvas kitölti a képernyőt (`canvas_items` + `expand`), nagyítás és görgetés tiltva, a swipe érintéssel működik.
+  A seed-mezőhöz a böngésző virtuális billentyűzete jön fel (`html/experimental_virtual_keyboard`).
+- A haladás és a rekordok a böngésző tárhelyén (IndexedDB) maradnak meg.
+
+**Egyszeri kézi beállítás (Bence):** a repóban **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+Amíg ez nincs bekapcsolva, a telepítő lépés hibával áll le. Bekapcsolás után indítsd újra a workflow-t
+(Actions → web-build-pages → Run workflow), vagy pusholj a main-re. A cím: <https://kbence9.github.io/labor-eger/>.
+
+Helyben:
+
+```
+# export sablonok: Godot szerkesztő → Editor → Manage Export Templates → Download (4.7.stable)
+godot --headless --path . --export-release "Web" build/web/index.html
+cd build/web && python3 -m http.server 8000      # http://localhost:8000
+```
+
+<img src="docs/screenshots/web_mobil_menu.png" alt="Webes build telefonon: főmenü" width="200"> <img src="docs/screenshots/web_mobil_jatek.png" alt="Webes build telefonon: játék swipe után" width="200">
 
 ## Pályaszerkesztő
 
@@ -82,6 +108,7 @@ scripts/game/  jelenetekhez kötött kód (rajzolás, input, UI, hang)
 levels/        pályák JSON-ban (formátum: docs/GDD.md) + order.json (sorrend)
 assets/        betűk (licencekkel), később hangok
 tools/         segédszkriptek (pl. pálya-ellenőrző)
+export_presets.cfg  webes export preset (egyszálas, GitHub Pages-hez)
 prototype/     a webes prototípus referenciának
 docs/          terv és ütemezés; docs/screenshots/ képernyőképek a README-hez
 ```

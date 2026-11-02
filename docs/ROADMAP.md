@@ -26,7 +26,8 @@ Becslés esti munkára (heti ~6–8 óra). Minden mérföldkő végén legyen va
 - **Kész, ha:** 15 pálya, mind megoldható, átlag halálszám mérve.
 
 ## M5 – Teszt (most következik)
-- Webes export (Godot export sablonok, egyszálas web build), privát itch.io oldalra, link a haveroknak.
+- ✅ (2026-11-02) Webes export (egyszálas web build, `export_presets.cfg`) és automatikus telepítés GitHub Pages-re minden main-pushnál (`.github/workflows/pages.yml`). Telefonos böngészőben ellenőrizve: skálázás, swipe.
+- Hátra: privát itch.io oldal (ha a Pages nem elég), link a haveroknak.
 - Mérni: hol halnak meg, hol adják fel (halál-heatmap pályánként).
 
 ## M6 – Kiadás

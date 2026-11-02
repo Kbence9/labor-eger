@@ -10,6 +10,7 @@ signal won(seconds: float, deaths: int)
 const STEP_TIME := 0.085
 const CRACK_TIME := 0.45
 const DEATH_TIME := 1.15
+const WIN_CARD_DELAY := 0.6
 const SWIPE_PX := 40.0
 const HUD_TOP := 150.0
 const HUD_BOTTOM := 120.0
@@ -27,6 +28,8 @@ var painter := BoardPainter.new()
 var test_mode := false
 var has_next := false
 var subject_base := 0   # az eddigi összes halál (a haladásból): az alany sorszáma ehhez adódik
+var best_before := -1.0 # az eddigi legjobb idő ezen a pályán (mp; -1: még nincs) – a main állítja start() előtt
+var next_text := "Következő"  # a győzelmi lap fő gombja (véletlen kísérletnél: „Új labirintus”)
 
 var disp := Vector2.ZERO
 var anim: Dictionary = {}
@@ -46,12 +49,15 @@ var shake := 0.0
 var flash := 0.0
 var now := 0.0
 var touch_start := Vector2.INF
+var _run_id := 0        # minden start() növeli: a késleltetett győzelmi lap nem nyílhat rá egy új futásra
 
 var _ui: Control
 var _lbl_title: Label
 var _lbl_subject: Label
 var _lbl_time: Label
 var _lbl_deaths: Label
+var _lbl_best: Label
+var _win_record: Label
 var _toast: PanelContainer
 var _toast_head: Label
 var _toast_note: Label
@@ -72,6 +78,7 @@ func start(L: LevelData, is_test: bool = false, next_available: bool = false) ->
 	test_mode = is_test
 	has_next = next_available
 	painter.seed = L.id + 1
+	_run_id += 1
 	deaths = 0
 	t_start = -1.0
 	t_end = -1.0
@@ -81,6 +88,8 @@ func start(L: LevelData, is_test: bool = false, next_available: bool = false) ->
 	_lbl_title.text = ("Teszt: " if test_mode else "") + L.title
 	_win.visible = false
 	_toast.visible = false
+	_btn_next.text = next_text
+	_lbl_best.text = ("Rekord: " + _fmt(best_before)) if best_before >= 0.0 else ""
 	_layout()
 
 
@@ -294,11 +303,23 @@ func restart() -> void:
 func _on_win() -> void:
 	moving = false
 	t_end = now
-	won.emit(t_end - t_start, deaths)
+	var secs := t_end - t_start
+	won.emit(secs, deaths)
 	_confetti(Vector2(state.pos))
-	await get_tree().create_timer(0.6).timeout
+	var run := _run_id
+	await get_tree().create_timer(WIN_CARD_DELAY).timeout
+	# közben új futás indult (Újra / másik pálya / kilépés): ennek a győzelmi lapja már nem kell
+	if run != _run_id or not visible:
+		return
 	_win_title.text = level.title + " lezárva"
-	_win_stats.text = "Idő: %s     Elhunyt alanyok: %d" % [_fmt(t_end - t_start), deaths]
+	_win_stats.text = "Idő: %s     Elhunyt alanyok: %d" % [_fmt(secs), deaths]
+	_win_record.text = record_text(secs, best_before)
+	_win_record.add_theme_color_override("font_color", BoardPainter.MARK if is_record(secs, best_before) else BoardPainter.INK_SOFT)
+	if test_mode:
+		_win_record.text = ""
+	elif is_record(secs, best_before):
+		best_before = secs
+		_lbl_best.text = "Rekord: " + _fmt(secs)
 	if deaths == 0:
 		_win_note.text = "Elsőre? Gyanús. Az alanyt további vizsgálatra javasoljuk."
 	elif deaths < 5:
@@ -307,6 +328,19 @@ func _on_win() -> void:
 		_win_note.text = "Szép munka. A labor hálás a(z) %d önkéntesért." % deaths
 	_btn_next.visible = has_next and not test_mode
 	_win.visible = true
+
+
+static func is_record(secs: float, prev_best: float) -> bool:
+	return prev_best < 0.0 or secs < prev_best
+
+
+## A győzelmi lap rekord-sora.
+static func record_text(secs: float, prev_best: float) -> String:
+	if prev_best < 0.0:
+		return "Első mért idő, ez lesz a rekord."
+	if secs < prev_best:
+		return "Új rekord! Az előző: %s (-%.1f mp)" % [_fmt(prev_best), prev_best - secs]
+	return "Rekord: %s (+%.1f mp)" % [_fmt(prev_best), secs - prev_best]
 
 
 static func _fmt(sec: float) -> String:
@@ -480,15 +514,19 @@ func _build_ui() -> void:
 	stats.offset_left = -340
 	stats.offset_right = -130
 	stats.offset_top = 30
-	stats.offset_bottom = 120
+	stats.offset_bottom = 150
 	stats.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_ui.add_child(stats)
 	_lbl_time = UiKit.label("0:00.0", 34, BoardPainter.INK, "type")
 	_lbl_time.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_lbl_deaths = UiKit.label("Halál: 0", 28, BoardPainter.MARK, "bold")
 	_lbl_deaths.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_lbl_best = UiKit.label("", 22, BoardPainter.INK_SOFT, "type")
+	_lbl_best.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	stats.add_theme_constant_override("separation", 0)
 	stats.add_child(_lbl_time)
 	stats.add_child(_lbl_deaths)
+	stats.add_child(_lbl_best)
 
 	var bottom := HBoxContainer.new()
 	bottom.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
@@ -541,6 +579,8 @@ func _build_ui() -> void:
 	_win_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	wv.add_child(_win_title)
 	wv.add_child(_win_stats)
+	_win_record = UiKit.label("", 26, BoardPainter.INK_SOFT, "bold")
+	wv.add_child(_win_record)
 	wv.add_child(_win_note)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 16)

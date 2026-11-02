@@ -92,13 +92,17 @@ func load_level(path: String) -> LevelData:
 	return parse(txt)
 
 
-## JSON szövegből pálya (vagy null, ha nem pálya).
+## JSON szövegből pálya (vagy null, ha nem pálya, vagy a mérete kívül esik a 4–12 × 4–16-on).
 static func parse(txt: String) -> LevelData:
 	var j := JSON.new()
 	if j.parse(txt.strip_edges()) != OK:
 		return null
 	var data: Variant = j.data
-	if typeof(data) != TYPE_DICTIONARY or not data.has("size"):
+	if typeof(data) != TYPE_DICTIONARY or not LevelData.is_size_ok(data.get("size")):
+		return null
+	var c := int(data["size"][0])
+	var r := int(data["size"][1])
+	if c < LevelData.MIN_COLS or c > LevelData.MAX_COLS or r < LevelData.MIN_ROWS or r > LevelData.MAX_ROWS:
 		return null
 	return LevelData.from_dict(data)
 

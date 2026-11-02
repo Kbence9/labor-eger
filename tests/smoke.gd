@@ -33,6 +33,23 @@ func _ok(cond: bool, msg: String) -> void:
 		fails += 1
 
 
+## A futó pályát végigjátssza a megoldóval (ahol épp az egér áll).
+func _solve_current() -> void:
+	var g: LabGame = main.game
+	var n := 0
+	while not g.state.won and n < 6000:
+		n += 1
+		if g.is_busy():
+			await process_frame
+			continue
+		var path := Solver.solve(g.level, g.state)
+		if path.is_empty():
+			print("nincs út innen")
+			return
+		g.input_dir(path[0])
+		await process_frame
+
+
 func _intro_at(sec: float, name: String) -> void:
 	var ts: TitleScreen = main.title
 	ts.t = sec
@@ -84,6 +101,50 @@ func _run() -> void:
 		await _frames(50)
 		if idx == 0:
 			await _shot("03_win")
+	# rekord: az 1. pálya újra, a legjobb idő a HUD-on és a győzelmi lapon
+	var g1: LabGame = main.game
+	main.play_level(0)
+	await _frames(3)
+	_ok(g1._lbl_best.text.begins_with("Rekord: "), "a HUD mutatja a rekordot: %s" % g1._lbl_best.text)
+	# versenyhelyzet: győzelem után azonnal másik pálya -> a régi győzelmi lap nem nyílhat rá
+	await _solve_current()
+	while g1.t_end < 0.0:   # a győzelem (a lépés-animáció végén) megtörtént, a lap még késleltetve
+		await process_frame
+	main.play_level(1)
+	await create_timer(LabGame.WIN_CARD_DELAY + 0.3).timeout
+	await _frames(2)
+	_ok(not g1._win.visible and not g1.state.won, "győzelem után azonnal indított pályára nem nyílik rá a régi győzelmi lap")
+
+	# véletlen labirintus: menü, mindhárom szint végigjátszva, rekord mentve
+	main.show_title(false)
+	await _frames(5)
+	main.show_random_menu()
+	await _frames(5)
+	await _shot("13_veletlen_menu")
+	for c in main.title.ui_root().get_children():
+		if c.get_class() == "Control":
+			c.queue_free()
+	for diff in RandomMaze.ORDER:
+		main.play_random(diff, 4242)
+		await _frames(5)
+		var gr: LabGame = main.game
+		_ok(gr.level.cols == RandomMaze.LEVELS[diff]["size"].x and gr._btn_next.text == "Új labirintus", "véletlen %s: %dx%d" % [diff, gr.level.cols, gr.level.rows])
+		if diff == "nehez":
+			await _shot("14_veletlen_nehez")
+		await _solve_current()
+		await _frames(50)
+		_ok(gr.state.won and gr._win.visible and gr._win_record.text.begins_with("Első"), "véletlen %s megoldva, első idő: %s" % [diff, gr._win_record.text])
+		_ok(main.progress.best(RandomMaze.progress_key(diff)) > 0.0, "véletlen %s: a rekord mentve" % diff)
+	await _shot("15_veletlen_gyozelem")
+	var seed_before: int = main._random["seed"]
+	main._on_game_next()
+	await _frames(3)
+	_ok(main._random["seed"] != seed_before and main.game.best_before > 0.0, "Új labirintus: más seed, a szint rekordja a HUD-on")
+	main.play_random(RandomMaze.DAILY, RandomMaze.daily_seed(Time.get_date_dict_from_system()), true)
+	await _frames(3)
+	_ok(main.game.level.title == "A nap labirintusa" and main._current_file().begins_with("napi:"), "a nap labirintusa: %s" % main._current_file())
+	await _shot("16_nap_labirintusa")
+
 	# halál-üzenet (a haladásba is beszámít)
 	main.play_level(0)
 	await _frames(3)

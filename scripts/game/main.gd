@@ -15,6 +15,7 @@ var _testing_from_editor := false
 var _back_to_title := false
 var _list_edit_mode := false
 var _list_scroll := 0
+var _random: Dictionary = {}   # véletlen kísérlet: {"diff", "seed", "daily"}; üres = beépített pálya
 
 
 func _ready() -> void:
@@ -36,6 +37,7 @@ func _ready() -> void:
 	title.continue_requested.connect(continue_game)
 	title.levels_requested.connect(func(): show_level_list(false))
 	title.editor_requested.connect(func(): show_level_list(true))
+	title.random_requested.connect(show_random_menu)
 	menu_layer = CanvasLayer.new()
 	add_child(menu_layer)
 	show_title(true)
@@ -160,6 +162,37 @@ func _paste_new() -> void:
 	editor.dirty = true
 
 
+# ---------- véletlen kísérlet ----------
+func show_random_menu() -> void:
+	var opts: Array = []
+	for diff in RandomMaze.ORDER:
+		var cfg: Dictionary = RandomMaze.LEVELS[diff]
+		var size: Vector2i = cfg["size"]
+		var best := progress.best(RandomMaze.progress_key(diff))
+		var label := "%s  (%d × %d)" % [cfg["name"], size.x, size.y]
+		if best >= 0.0:
+			label += "   rekord " + LabGame._fmt(best)
+		var d: String = diff
+		opts.append([label, func(): play_random(d, RandomMaze.new_seed()), "ink"])
+	opts.append(["A nap labirintusa", func(): play_random(RandomMaze.DAILY, RandomMaze.daily_seed(Time.get_date_dict_from_system()), true), "primary"])
+	opts.append(["Mégse", Callable(), "text"])
+	UiKit.modal(title.ui_root(), "Véletlen labirintus", "Minden indítás új, seedből generált pálya. A nap labirintusa ma mindenkinek ugyanaz.", opts)
+
+
+func play_random(diff: String, seed: int, daily: bool = false) -> void:
+	if not RandomMaze.is_valid(diff):
+		return
+	var L := RandomMaze.build(diff, seed)
+	if daily:
+		L.title = "A nap labirintusa"
+	_hide_all()
+	_random = {"diff": diff, "seed": seed, "daily": daily}
+	_current_index = -1
+	_testing_from_editor = false
+	_back_to_title = true
+	_start_game(L, false, true, "Új labirintus")
+
+
 # ---------- játék ----------
 func play_level(idx: int, from_title: bool = false) -> void:
 	if idx < 0 or idx >= _levels.size():
@@ -168,12 +201,20 @@ func play_level(idx: int, from_title: bool = false) -> void:
 	if L == null:
 		return
 	_hide_all()
+	_random = {}
 	_current_index = idx
 	_testing_from_editor = false
 	_back_to_title = from_title
-	game.subject_base = progress.total_deaths
+	_start_game(L, false, idx + 1 < _levels.size(), "Következő")
+
+
+func _start_game(L: LevelData, is_test: bool, has_next: bool, next_text: String) -> void:
+	game.subject_base = 0 if is_test else progress.total_deaths
+	var key := _current_file()
+	game.best_before = progress.best(key) if key != "" else -1.0
+	game.next_text = next_text
 	game.set_active(true)
-	game.start(L, false, idx + 1 < _levels.size())
+	game.start(L, is_test, has_next)
 
 
 func open_editor(idx: int) -> void:
@@ -189,13 +230,17 @@ func open_editor(idx: int) -> void:
 func _on_editor_test(L: LevelData) -> void:
 	_hide_all()
 	_testing_from_editor = true
-	game.subject_base = 0
-	game.set_active(true)
-	game.start(L, true, false)
+	_start_game(L, true, false, "Következő")
 
 
+## A haladás kulcsa a futó pályához: fájlnév, véletlen kísérletnél „veletlen:<szint>” / „napi:<seed>”,
+## szerkesztőből tesztelve "" (az nem számít bele a haladásba).
 func _current_file() -> String:
-	if _testing_from_editor or _current_index < 0 or _current_index >= _levels.size():
+	if _testing_from_editor:
+		return ""
+	if not _random.is_empty():
+		return RandomMaze.progress_key(_random["diff"], _random["daily"], _random["seed"])
+	if _current_index < 0 or _current_index >= _levels.size():
 		return ""
 	return _levels[_current_index]["file"]
 
@@ -224,7 +269,10 @@ func _on_game_back() -> void:
 
 
 func _on_game_next() -> void:
-	if _current_index + 1 < _levels.size():
+	if not _random.is_empty():
+		var diff: String = _random["diff"]
+		play_random(diff, RandomMaze.new_seed())
+	elif _current_index + 1 < _levels.size():
 		play_level(_current_index + 1, _back_to_title)
 
 

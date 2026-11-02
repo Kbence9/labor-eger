@@ -11,6 +11,7 @@ extends Node2D
 signal continue_requested
 signal levels_requested
 signal editor_requested
+signal random_requested
 
 const MAZE_COLS := 7
 const MAZE_ROWS := 7
@@ -597,7 +598,11 @@ func _build_ui() -> void:
 	_btn_main.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_menu.add_child(_btn_main)
 	_buttons.append(_btn_main)
-	for b in [["Pályák", func(): levels_requested.emit()], ["Pályaszerkesztő", func(): editor_requested.emit()]]:
+	# második sor: Pályák + Véletlen labirintus egymás mellett, hogy a menü ne nőjön a labirintusba
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 28)
+	_menu.add_child(row)
+	for b in [["Pályák", func(): levels_requested.emit(), row], ["Véletlen labirintus", func(): random_requested.emit(), row], ["Pályaszerkesztő", func(): editor_requested.emit(), _menu]]:
 		var btn := UiKit.button(b[0], b[1], "text")
 		btn.add_theme_font_size_override("font_size", 42)
 		btn.add_theme_color_override("font_color", BoardPainter.PEN)
@@ -605,5 +610,10 @@ func _build_ui() -> void:
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		btn.custom_minimum_size = Vector2(0, 78)
-		_menu.add_child(btn)
+		(b[2] as Control).add_child(btn)
 		_buttons.append(btn)
+
+
+## A menü UI-gyökere (ide nyílnak a főmenüből indított ablakok, pl. a nehézségi szint választó).
+func ui_root() -> Control:
+	return _ui

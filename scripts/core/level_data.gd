@@ -27,9 +27,17 @@ static func ck(c: Vector2i) -> String:
 	return "%d,%d" % [c.x, c.y]
 
 
+## "x,y" -> cella. Hibás szövegre Vector2i(-1, -1) (pályán kívüli); ellenőrizni: is_cell_str().
 static func parse_cell(s: String) -> Vector2i:
+	if not is_cell_str(s):
+		return Vector2i(-1, -1)
 	var p := s.strip_edges().split(",")
 	return Vector2i(int(p[0]), int(p[1]))
+
+
+static func is_cell_str(s: String) -> bool:
+	var p := s.strip_edges().split(",")
+	return p.size() == 2 and p[0].strip_edges().is_valid_int() and p[1].strip_edges().is_valid_int()
 
 
 static func ek(a: Vector2i, b: Vector2i) -> String:
@@ -38,39 +46,74 @@ static func ek(a: Vector2i, b: Vector2i) -> String:
 	return ck(b) + "|" + ck(a)
 
 
+## "x,y|x,y" -> [a, b]. Hibás szövegre üres tömb.
 static func parse_edge(s: String) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
 	var p := s.split("|")
-	var out: Array[Vector2i] = [parse_cell(p[0]), parse_cell(p[1])]
+	if p.size() != 2 or not is_cell_str(p[0]) or not is_cell_str(p[1]):
+		return out
+	out.append(parse_cell(p[0]))
+	out.append(parse_cell(p[1]))
 	return out
 
 
+## Igaz, ha a "size" mező [oszlop, sor] alakú, két számmal.
+static func is_size_ok(size: Variant) -> bool:
+	if typeof(size) != TYPE_ARRAY or (size as Array).size() != 2:
+		return false
+	for v in size:
+		if typeof(v) != TYPE_INT and typeof(v) != TYPE_FLOAT:
+			return false
+	return true
+
+
+static func _as_array(v: Variant) -> Array:
+	return v if typeof(v) == TYPE_ARRAY else []
+
+
+## Dictionary -> pálya. Kézzel írt / beillesztett JSON-ra is: a hibás bejegyzéseket kihagyja,
+## és az `errors` listába írja (a validate() ezeket is visszaadja), nem áll le script-hibával.
 static func from_dict(d: Dictionary) -> LevelData:
 	var L := LevelData.new()
-	L.id = int(d.get("id", 0))
+	L.id = int(d.get("id", 0)) if typeof(d.get("id", 0)) in [TYPE_INT, TYPE_FLOAT] else 0
 	L.title = str(d.get("name", "Névtelen"))
-	var size: Array = d.get("size", [7, 9])
-	L.cols = int(size[0])
-	L.rows = int(size[1])
-	for p in d.get("paths", []):
+	var size: Variant = d.get("size", [7, 9])
+	if is_size_ok(size):
+		L.cols = int(size[0])
+		L.rows = int(size[1])
+	else:
+		L.errors.append("Hibás méret: %s (két szám kell: [oszlop, sor])." % str(size))
+	for p in _as_array(d.get("paths", [])):
 		var pts := str(p).strip_edges().split(" ", false)
 		for i in range(1, pts.size()):
+			if not is_cell_str(pts[i - 1]) or not is_cell_str(pts[i]):
+				L.errors.append("Hibás cella az útvonalban: %s -> %s" % [pts[i - 1], pts[i]])
+				continue
 			var a := parse_cell(pts[i - 1])
 			var b := parse_cell(pts[i])
 			if absi(a.x - b.x) + absi(a.y - b.y) != 1:
 				L.errors.append("Nem szomszédos cellák: %s -> %s" % [pts[i - 1], pts[i]])
 				continue
 			L.open[ek(a, b)] = true
-	for e in d.get("edges", []):
-		var ab := parse_edge(str(e))
-		L.open[ek(ab[0], ab[1])] = true
-	for e in d.get("breakable", []):
-		var ab := parse_edge(str(e))
-		var k := ek(ab[0], ab[1])
-		L.open.erase(k)
-		L.breakable[k] = true
-	var objs: Dictionary = d.get("objects", {})
-	for k in objs:
-		L.objects[parse_cell(str(k))] = str(objs[k]).to_upper()
+	for key in ["edges", "breakable"]:
+		for e in _as_array(d.get(key, [])):
+			var ab := parse_edge(str(e))
+			if ab.is_empty() or absi(ab[0].x - ab[1].x) + absi(ab[0].y - ab[1].y) != 1:
+				L.errors.append("Hibás él: %s" % str(e))
+				continue
+			var k := ek(ab[0], ab[1])
+			if key == "edges":
+				L.open[k] = true
+			else:
+				L.open.erase(k)
+				L.breakable[k] = true
+	var objs: Variant = d.get("objects", {})
+	if typeof(objs) == TYPE_DICTIONARY:
+		for k in objs:
+			if not is_cell_str(str(k)):
+				L.errors.append("Hibás cella a tárgyaknál: %s" % str(k))
+				continue
+			L.objects[parse_cell(str(k))] = str(objs[k]).to_upper()
 	L.rebuild()
 	return L
 
@@ -135,6 +178,8 @@ func rebuild() -> void:
 ## Hibalista; üres = a pálya játszható.
 func validate() -> Array[String]:
 	var out: Array[String] = errors.duplicate()
+	if cols < MIN_COLS or cols > MAX_COLS or rows < MIN_ROWS or rows > MAX_ROWS:
+		out.append("A méret %d×%d; megengedett: %d–%d × %d–%d." % [cols, rows, MIN_COLS, MAX_COLS, MIN_ROWS, MAX_ROWS])
 	if start.x < 0:
 		out.append("Nincs start.")
 	if exit_cell.x < 0:

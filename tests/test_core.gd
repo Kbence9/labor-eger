@@ -1,7 +1,7 @@
 extends SceneTree
 ## Headless teszt: godot --headless --path . -s tests/test_core.gd
 ## Minden pálya érvényes és megoldható; JSON oda-vissza alakítás veszteségmentes;
-## labirintus-generátor, visszavonás, haladás-mentés.
+## labirintus-generátor, visszavonás, haladás-mentés, hibás bemenetek, véletlen kísérlet (szint + seed).
 
 var fails := 0
 
@@ -82,6 +82,53 @@ func _init() -> void:
 	_ok(P2.next_index(PackedStringArray(["level_01.json", "level_02.json"])) == 1, "folytatás a következő nem teljesített pályán")
 	DirAccess.remove_absolute(path)
 	_ok(LevelLibrary.parse("nem json") == null and LevelLibrary.parse("{\"a\":1}") == null, "beillesztés: a nem-pálya szöveget elutasítja")
+
+	# hibás / kézzel elrontott pálya-JSON: nem állhat le script-hibával
+	for bad in ['{"size": 5}', '{"size": ["a", 3]}', '{"size": [0, 0]}', '{"size": [99, 9]}', '[1, 2]']:
+		_ok(LevelLibrary.parse(bad) == null, "beillesztés: elutasítva %s" % bad)
+	var B := LevelLibrary.parse('{"size": [5, 5], "edges": ["x", "0,0|1,0", "0,0|3,3", 7], "breakable": "nem lista", "paths": ["0,1 1"], "objects": {"q": "S", "0,4": "s", "4,0": "E"}}')
+	_ok(B != null and B.open.size() == 1 and B.start == Vector2i(0, 4) and B.exit_cell == Vector2i(4, 0), "hibás bejegyzések kihagyva, a jók betöltve")
+	_ok(B != null and B.validate().size() == 5, "a kihagyott bejegyzések hibaként jelennek meg (%s)" % (str(B.validate()) if B else "-"))
+	_ok(LevelData.new_empty(3, 9).validate().size() == 1, "a túl kicsi pálya méret-hibát kap")
+
+	# sérült haladás-fájl: nem dőlhet el tőle a játék
+	var bad_path := "user://teszt_progress_hibas.json"
+	for txt in ['nem json', '[1,2]', '{"levels": [1, 2], "total_deaths": "x"}', '{"levels": {"a.json": 3, "b.json": {"done": "igen", "best": "gyors", "deaths": -4}}, "total_deaths": 2}']:
+		var f := FileAccess.open(bad_path, FileAccess.WRITE)
+		f.store_string(txt)
+		f.close()
+		var BP := Progress.load_from(bad_path)
+		_ok(BP != null and BP.next_index(PackedStringArray(["a.json"])) == 0, "sérült haladás betölthető: %s" % txt)
+	var BP2 := Progress.load_from(bad_path)
+	_ok(BP2.total_deaths == 2 and not BP2.is_done("b.json") and BP2.best("b.json") < 0.0 and BP2.deaths("b.json") == 0 and not BP2.levels.has("a.json"), "sérült haladás: az értelmezhető rész megmarad")
+	DirAccess.remove_absolute(bad_path)
+
+	# véletlen kísérlet: nehézségi szint + seed
+	for diff in RandomMaze.ORDER:
+		var cfg: Dictionary = RandomMaze.LEVELS[diff]
+		for seed in [1, 7, 123456, 20261102]:
+			var R := RandomMaze.build(diff, seed)
+			var R2 := RandomMaze.build(diff, seed)
+			var same_seed := JSON.stringify(R.to_dict()) == JSON.stringify(R2.to_dict())
+			var size_ok: bool = Vector2i(R.cols, R.rows) == cfg["size"]
+			var traps := 0
+			for c in R.objects:
+				traps += 1 if R.objects[c] == "T" else 0
+			var sol := Solver.solve(R)
+			_ok(same_seed and size_ok and R.validate().is_empty() and not sol.is_empty() and traps == cfg["traps"] and R.start != R.exit_cell,
+				"véletlen %s seed=%d: ugyanaz=%s méret=%dx%d csapda=%d megoldás=%d lépés" % [diff, seed, same_seed, R.cols, R.rows, traps, sol.size()])
+	_ok(JSON.stringify(RandomMaze.build("kozepes", 1).to_dict()) != JSON.stringify(RandomMaze.build("kozepes", 2).to_dict()), "más seed: más labirintus")
+	var Rk := RandomMaze.build("konnyu", 5)
+	_ok(Solver.solve(Rk).size() >= Rk.cols + Rk.rows - 2 - 4, "a kijárat messze van a starttól (%d lépés)" % Solver.solve(Rk).size())
+	_ok(RandomMaze.daily_seed({"year": 2026, "month": 11, "day": 2}) == 20261102, "a nap seedje: ÉÉÉÉHHNN")
+	_ok(RandomMaze.progress_key("nehez") == "veletlen:nehez" and RandomMaze.progress_key("kozepes", true, 20261102) == "napi:20261102", "haladás-kulcsok")
+	var s1 := RandomMaze.new_seed()
+	_ok(s1 >= 1 and s1 <= RandomMaze.MAX_SEED, "új seed a tartományban")
+
+	# rekord-szöveg a győzelmi lapon
+	_ok(LabGame.is_record(10.0, -1.0) and LabGame.is_record(9.0, 10.0) and not LabGame.is_record(10.0, 10.0), "rekord: első idő és javítás számít, döntetlen nem")
+	_ok(LabGame.record_text(9.0, 10.5).begins_with("Új rekord! Az előző: 0:10.5 (-1.5 mp)"), "rekord-szöveg: %s" % LabGame.record_text(9.0, 10.5))
+	_ok(LabGame.record_text(12.0, 10.0) == "Rekord: 0:10.0 (+2.0 mp)", "lassabb futás: %s" % LabGame.record_text(12.0, 10.0))
 
 	print("FAILS=%d" % fails)
 	quit(1 if fails > 0 else 0)

@@ -52,6 +52,14 @@ func _ok(cond: bool, msg: String) -> void:
 		fails += 1
 
 
+## Megvárja a győzelmi lapot (késleltetve nyílik, LabGame.WIN_CARD_DELAY): képkocka-szám helyett
+## valós időt vár, mert a képkockák hossza gépenként más (CI-n gyorsabb, mint a késleltetés).
+func _wait_win_card(g: LabGame, limit: float = 5.0) -> void:
+	var t0 := Time.get_ticks_msec()
+	while not g._win.visible and Time.get_ticks_msec() - t0 < limit * 1000.0:
+		await process_frame
+
+
 ## A host alatti első gomb megnyomása, amelynek felirata így kezdődik.
 func _press_in(host: Node, prefix: String) -> void:
 	for b in host.find_children("*", "Button", true, false):
@@ -126,7 +134,7 @@ func _run() -> void:
 			if idx == 2 and n == 60:
 				await _shot("04_l3_mid")
 		_ok(g.state.won and g.deaths == 0, "pálya %d: nyert=%s halál=%d" % [idx + 1, g.state.won, g.deaths])
-		await _frames(50)
+		await _wait_win_card(g)
 		if idx == 0:
 			await _shot("03_win")
 	# rekord: az 1. pálya újra, a legjobb idő a HUD-on és a győzelmi lapon
@@ -181,7 +189,7 @@ func _run() -> void:
 		if diff == "nehez":
 			await _shot("14_veletlen_nehez")
 		await _solve_current()
-		await _frames(50)
+		await _wait_win_card(gr)
 		_ok(gr.state.won and gr._win.visible and gr._win_record.text.begins_with("Első"), "véletlen %s megoldva, első idő: %s" % [diff, gr._win_record.text])
 		_ok(main.progress.best(RandomMaze.progress_key(diff)) > 0.0, "véletlen %s: a rekord mentve" % diff)
 	await _shot("15_veletlen_gyozelem")

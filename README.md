@@ -1,5 +1,7 @@
 # Labor Egér
 
+[![tesztek](https://github.com/Kbence9/labor-eger/actions/workflows/tesztek.yml/badge.svg)](https://github.com/Kbence9/labor-eger/actions/workflows/tesztek.yml)
+
 Szívatós labirintusjáték egy kísérleti egérrel, „Labornapló” stílusban (pöttyös füzet, golyóstoll, piros pecsét). Nincs jelmagyarázat:
 a játékos halálokon keresztül tanul. Mobilra (Android, később iOS) és webre készül, Godot 4.7-ben.
 
@@ -21,12 +23,15 @@ Irányítás: húzd az ujjad (swipe) vagy nyilak / WASD; **R** újrakezdés, **E
 - **Véletlen labirintus nehézségi szintekkel:** főmenü → *Véletlen labirintus* → Könnyű (5×6) / Közepes (7×9, 2 sajt-csapda) / Nehéz (10×13, 5 csapda).
   Minden pálya seedből készül (a címben látszik, pl. „Nehéz #4242”), ugyanaz a seed ugyanazt a pályát adja. A győzelmi lapon **Új labirintus**.
 - **A nap labirintusa:** a mai dátum a seed, így ma mindenkinek ugyanaz a pálya.
+- **Seed kézzel (új):** a *Véletlen labirintus* ablakban beírhatsz egy seedet (pl. egy barátod „Nehéz #4242” pályájáét), aztán válassz szintet: ugyanaz a szint + seed ugyanazt a pályát adja. Üresen hagyva véletlen seed. Csak számjegy jó (1–99999999, a `#` és a szóköz nem számít); hibás bevitelnél piros üzenet jelenik meg, és az ablak nyitva marad.
 - **Rekord (legjobb idő):** játék közben az időmérő alatt, a győzelmi lapon pedig „Új rekord!” vagy a különbség a rekordhoz. A véletlen labirintusnál szintenként külön rekord. Az eszközön tárolódik (`user://progress.json`; weben a böngésző tárhelyén).
 - **Javítások:** hibás pálya-JSON beillesztése nem omlik össze (a hibás sorokat kihagyja és jelzi, a rossz méretűt elutasítja); sérült `progress.json` nem dönti el a játékot; győzelem után gyorsan indított új pályára nem ugrik fel a régi győzelmi lap.
 
 | Főmenü | Véletlen labirintus | Győzelem rekorddal |
 |---|---|---|
 | ![Főmenü](docs/screenshots/fomenu.png) | ![Szintválasztó](docs/screenshots/veletlen_menu.png) | ![Győzelmi lap](docs/screenshots/veletlen_gyozelem.png) |
+
+![Seed kézzel, hibás bevitellel](docs/screenshots/veletlen_seed.png)
 
 Képernyőképek: `docs/screenshots/` (a füsttesztből: `user://shots/`, Linuxon `~/.local/share/godot/app_userdata/Labor Egér/shots/`).
 
@@ -60,6 +65,12 @@ xvfb-run godot --path . --resolution 720x1280 -s tests/smoke.gd   # végigjátsz
 ```
 
 Mindkettő `FAILS=0`-t ír és 0-val lép ki, ha minden rendben. A füstteszt képei a `user://shots/` mappába kerülnek.
+Ha futás közben script-hiba történik (pl. túlindexelés), a teszt **1-es kóddal azonnal kilép** és kiírja az első hibát
+(`tests/error_guard.gd` figyeli), nem lóg a végtelenségig.
+
+**CI:** a `.github/workflows/tesztek.yml` minden push és PR esetén letölti a Godot 4.7-stable-t (SHA-512 ellenőrzéssel),
+importál, futtatja a `test_core.gd`-t headless, a `smoke.gd`-t xvfb alatt, és a füstteszt képernyőképeit `smoke-shots`
+artifactként menti.
 
 ## Mappák
 

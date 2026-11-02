@@ -1,0 +1,58 @@
+name: tesztek
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tesztek-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: "4.7-stable"
+
+jobs:
+  godot:
+    name: Godot 4.7 – test_core + smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rendszercsomagok (xvfb, Mesa szoftveres OpenGL)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1 libgl1-mesa-dri libglu1-mesa libxi6 libxcursor1 libxinerama1 libxrandr2 fontconfig
+
+      - name: Godot ${{ env.GODOT_VERSION }} letöltése (ellenőrzőösszeggel)
+        run: |
+          base="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}"
+          zip="Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          mkdir -p "$RUNNER_TEMP/godot" && cd "$RUNNER_TEMP/godot"
+          curl -fsSL --retry 4 -o "$zip" "$base/$zip"
+          curl -fsSL --retry 4 -o SHA512-SUMS.txt "$base/SHA512-SUMS.txt"
+          grep " $zip\$" SHA512-SUMS.txt | sha512sum -c -
+          unzip -q "$zip"
+          sudo ln -sf "$PWD/Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Import (osztálynevek, betűk)
+        run: godot --headless --path . --import
+
+      - name: test_core.gd (headless)
+        run: timeout 300 godot --headless --path . -s tests/test_core.gd
+
+      - name: smoke.gd (xvfb)
+        run: timeout 900 xvfb-run -a -s "-screen 0 1280x1600x24" godot --path . --audio-driver Dummy --resolution 720x1280 -s tests/smoke.gd
+
+      - name: Füstteszt képernyőképei
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-shots
+          path: ~/.local/share/godot/app_userdata/Labor Egér/shots/
+          if-no-files-found: ignore
+          retention-days: 7

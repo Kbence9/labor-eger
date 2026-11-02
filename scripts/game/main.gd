@@ -15,6 +15,9 @@ var _testing_from_editor := false
 var _back_to_title := false
 var _list_edit_mode := false
 var _list_scroll := 0
+var seed_edit: LineEdit       # a véletlen-menü seed-mezője (amíg a menü nyitva van)
+var seed_error: Label
+var random_menu: Control
 var _random: Dictionary = {}   # véletlen kísérlet: {"diff", "seed", "daily"}; üres = beépített pálya
 
 
@@ -164,6 +167,17 @@ func _paste_new() -> void:
 
 # ---------- véletlen kísérlet ----------
 func show_random_menu() -> void:
+	# seed-mező: üresen véletlen seed, kitöltve az adott seed (ugyanaz a seed + szint = ugyanaz a pálya)
+	var seed_lbl := UiKit.label("Seed (üresen hagyva: véletlen)", 24, BoardPainter.INK_SOFT, "type")
+	seed_edit = LineEdit.new()
+	seed_edit.placeholder_text = "pl. 4242"
+	seed_edit.max_length = 12
+	seed_edit.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
+	seed_edit.custom_minimum_size = Vector2(0, 64)
+	seed_error = UiKit.label("", 24, BoardPainter.MARK, "bold")
+	seed_error.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	seed_error.visible = false
+	seed_edit.text_changed.connect(func(_t): seed_error.visible = false)
 	var opts: Array = []
 	for diff in RandomMaze.ORDER:
 		var cfg: Dictionary = RandomMaze.LEVELS[diff]
@@ -173,10 +187,25 @@ func show_random_menu() -> void:
 		if best >= 0.0:
 			label += "   rekord " + LabGame._fmt(best)
 		var d: String = diff
-		opts.append([label, func(): play_random(d, RandomMaze.new_seed()), "ink"])
+		opts.append([label, func() -> bool: return start_random_from_input(d), "ink"])
 	opts.append(["A nap labirintusa", func(): play_random(RandomMaze.DAILY, RandomMaze.daily_seed(Time.get_date_dict_from_system()), true), "primary"])
 	opts.append(["Mégse", Callable(), "text"])
-	UiKit.modal(title.ui_root(), "Véletlen labirintus", "Minden indítás új, seedből generált pálya. A nap labirintusa ma mindenkinek ugyanaz.", opts)
+	random_menu = UiKit.modal(title.ui_root(), "Véletlen labirintus", "Válassz szintet. A nap labirintusa ma mindenkinek ugyanaz.", opts, [seed_lbl, seed_edit, seed_error])
+	seed_edit.text_submitted.connect(func(_t):
+		if start_random_from_input(RandomMaze.DAILY):
+			random_menu.queue_free())
+
+
+## A szint-gomb: a beírt seeddel (vagy üres mezőnél új véletlennel) indít.
+## Hibás bevitelnél kiírja a hibát, és false-t ad (a menü nyitva marad).
+func start_random_from_input(diff: String) -> bool:
+	var r := RandomMaze.parse_seed(seed_edit.text if seed_edit else "")
+	if not r["ok"]:
+		seed_error.text = r["error"]
+		seed_error.visible = true
+		return false
+	play_random(diff, RandomMaze.new_seed() if r["empty"] else int(r["seed"]))
+	return true
 
 
 func play_random(diff: String, seed: int, daily: bool = false) -> void:

@@ -16,7 +16,8 @@ const LEVELS := {
 	"nehez": {"name": "Nehéz", "size": Vector2i(10, 13), "loops": 0.03, "traps": 5},
 }
 const DAILY := "kozepes"
-const MAX_SEED := 999999
+const MAX_SEED := 999999          # a gép által sorsolt seed felső határa (rövid, könnyű megosztani)
+const MAX_INPUT_SEED := 99999999  # kézzel beírható: 8 számjegy, hogy a nap labirintusa (ÉÉÉÉHHNN) is beírható legyen
 
 
 static func is_valid(diff: String) -> bool:
@@ -32,6 +33,23 @@ static func new_seed() -> int:
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	return rng.randi_range(1, MAX_SEED)
+
+
+## Kézzel beírt seed ellenőrzése. Elfogad: „4242”, „ #4242 ”, „20 261 102” (szóköz és # nélkül számít).
+## Vissza: {"ok": bool, "seed": int, "empty": bool, "error": String}. Üres mező = ok, empty=true (véletlen seed kell).
+static func parse_seed(text: String) -> Dictionary:
+	var t := text.strip_edges().replace(" ", "").trim_prefix("#")
+	if t == "":
+		return {"ok": true, "seed": 0, "empty": true, "error": ""}
+	for ch in t:
+		if ch < "0" or ch > "9":
+			return {"ok": false, "seed": 0, "empty": false, "error": "A seed csak számjegyekből állhat (pl. 4242)."}
+	if t.length() > str(MAX_INPUT_SEED).length():
+		return {"ok": false, "seed": 0, "empty": false, "error": "Ez túl hosszú: legfeljebb %d számjegy." % str(MAX_INPUT_SEED).length()}
+	var n := t.to_int()
+	if n < 1:
+		return {"ok": false, "seed": 0, "empty": false, "error": "A seed legalább 1 legyen."}
+	return {"ok": true, "seed": n, "empty": false, "error": ""}
 
 
 ## A nap seedje: ÉÉÉÉHHNN (pl. 20261102). date: Time.get_date_dict_from_system() alakú.

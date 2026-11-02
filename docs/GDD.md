@@ -45,6 +45,7 @@ Kísérleti egér egy kézzel rajzolt labirintusban: semmi magyarázat, sok hal�
 
 - Start a labirintus egyik „végén”, a Kijárat a tőle legtávolabbi cellában (két szélességi keresés). A csapdák zsákutcák végére kerülnek, így sosem állják el a megoldást.
 - **A nap labirintusa:** Közepes, seed = a mai dátum (ÉÉÉÉHHNN), mindenkinek ugyanaz.
+- **Seed kézzel:** a szintválasztóban seed-mező (számbillentyűzet). Üresen hagyva új véletlen seed; kitöltve a választott szint azzal a seeddel indul, így egy barát pályája újrajátszható. Elfogadott: 1–99999999 (8 számjegy, hogy a nap seedje is beírható legyen), a szóköz és a `#` nem számít. Hibás bevitelnél az ablak nyitva marad, alatta piros hibaüzenet (`RandomMaze.parse_seed`). Enter = Közepes.
 - A győzelmi lapon „Új labirintus” (új seed, ugyanaz a szint). A halálok beszámítanak az alany sorszámába. Haladás-kulcs: `veletlen:<szint>` (szintenkénti rekord), ill. `napi:<seed>`.
 - **Hibás bemenet:** a beillesztett / kézzel írt pálya-JSON hibás bejegyzéseit (él, cella, útvonal) a betöltő kihagyja és hibaként jelzi; a 4–12 × 4–16-on kívüli vagy hibás méretű pályát elutasítja. A sérült `progress.json` nem dönti el a játékot: ami értelmezhető, megmarad.
 - Pálya-sorrend: `levels/order.json` (fájlnevek listája); ami nincs benne, a végére kerül név szerint. Telefonon a sorrend `user://levels/order.json`-ba ment.

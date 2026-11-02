@@ -4,6 +4,8 @@ extends SceneTree
 ## labirintus-generátor, visszavonás, haladás-mentés, hibás bemenetek, véletlen kísérlet (szint + seed).
 
 var fails := 0
+var finished := false
+var guard: Logger = preload("res://tests/error_guard.gd").new()
 
 
 func _ok(cond: bool, msg: String) -> void:
@@ -13,6 +15,33 @@ func _ok(cond: bool, msg: String) -> void:
 
 
 func _init() -> void:
+	OS.add_logger(guard)
+	_run_tests()
+	finished = true
+	_finish()
+
+
+## Ha egy script-hiba megszakította a tesztet, az _init() nem jut el a quit()-ig: az első
+## képkockán itt lépünk ki 1-es kóddal (nem a timeout állítja le).
+func _process(_delta: float) -> bool:
+	if not finished:
+		print("HIBA  a teszt script-hibával megszakadt: %s" % guard.first)
+		fails += 1
+		finished = true
+		_finish()
+	return true
+
+
+func _finish() -> void:
+	if guard.count > 0:
+		print("HIBA  %d script-hiba futás közben, az első: %s" % [guard.count, guard.first])
+		fails += 1
+	print("FAILS=%d" % fails)
+	OS.remove_logger(guard)
+	quit(1 if fails > 0 else 0)
+
+
+func _run_tests() -> void:
 	var dir := "res://levels"
 	for f in DirAccess.get_files_at(dir):
 		if not f.ends_with(".json") or f == LevelLibrary.ORDER_FILE:
@@ -130,5 +159,17 @@ func _init() -> void:
 	_ok(LabGame.record_text(9.0, 10.5).begins_with("Új rekord! Az előző: 0:10.5 (-1.5 mp)"), "rekord-szöveg: %s" % LabGame.record_text(9.0, 10.5))
 	_ok(LabGame.record_text(12.0, 10.0) == "Rekord: 0:10.0 (+2.0 mp)", "lassabb futás: %s" % LabGame.record_text(12.0, 10.0))
 
-	print("FAILS=%d" % fails)
-	quit(1 if fails > 0 else 0)
+	# kézzel beírt seed
+	var ps := RandomMaze.parse_seed("4242")
+	_ok(ps["ok"] and ps["seed"] == 4242 and not ps["empty"], "seed: 4242 elfogadva")
+	ps = RandomMaze.parse_seed("  #20 261 102 ")
+	_ok(ps["ok"] and ps["seed"] == 20261102, "seed: szóköz, # és a nap seedje (8 számjegy) elfogadva")
+	ps = RandomMaze.parse_seed("   ")
+	_ok(ps["ok"] and ps["empty"], "seed: üres mező = véletlen")
+	for bad in ["abc", "12a", "-5", "4.2", "0", "000", "123456789", "１２"]:
+		ps = RandomMaze.parse_seed(bad)
+		_ok(not ps["ok"] and str(ps["error"]) != "", "seed: elutasítva „%s”: %s" % [bad, ps["error"]])
+	var typed := RandomMaze.build("nehez", RandomMaze.parse_seed("#4242")["seed"])
+	_ok(JSON.stringify(typed.to_dict()) == JSON.stringify(RandomMaze.build("nehez", 4242).to_dict()), "beírt seed = ugyanaz a pálya")
+	var daily_typed := RandomMaze.build(RandomMaze.DAILY, RandomMaze.parse_seed("20261102")["seed"])
+	_ok(JSON.stringify(daily_typed.to_dict()) == JSON.stringify(RandomMaze.build(RandomMaze.DAILY, RandomMaze.daily_seed({"year": 2026, "month": 11, "day": 2})).to_dict()), "a nap seedje beírva a nap labirintusát adja")

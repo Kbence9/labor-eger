@@ -18,6 +18,8 @@ Becslés esti munkára (heti ~6–8 óra). Minden mérföldkő végén legyen va
 - Hátra: hangok, rezgés telefonon, halál-animációk finomítása.
 - **Kész, ha:** egy haver magától, magyarázat nélkül elindul vele.
 
+- ✅ (2026-11-02) Véletlen labirintus nehézségi szintekkel és seeddel (+ a nap labirintusa), rekord a HUD-on és a győzelmi lapon; robusztus pálya-JSON és haladás-betöltés.
+
 ## M4 – Pályák (2–3 hét)
 - 15 pálya növekvő nehézséggel, minden elem előbb biztonságosan jelenik meg, aztán szívat. Bence a szerkesztőben rajzolja őket.
 - ✅ (2026-10-04) Szerkesztő-bővítések: visszavonás/újra, folyosóvágó eszköz, generált labirintus, kitöltés, másolat, törlés, sorrend, JSON beillesztés, mentetlen-változás figyelmeztetés, ikonos eszköztár.

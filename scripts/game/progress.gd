@@ -10,19 +10,35 @@ var total_deaths := 0
 var save_path := PATH
 
 
+## Betöltés. Sérült vagy kézzel elrontott fájlnál sem áll le: ami nem értelmezhető, azt kihagyja.
 static func load_from(path: String = PATH) -> Progress:
 	var p := Progress.new()
 	p.save_path = path
 	var txt := FileAccess.get_file_as_string(path)
-	if txt != "":
-		var d: Variant = JSON.parse_string(txt)
-		if typeof(d) == TYPE_DICTIONARY:
-			p.total_deaths = int(d.get("total_deaths", 0))
-			var lv: Dictionary = d.get("levels", {})
-			for k in lv:
-				var e: Dictionary = lv[k]
-				p.levels[str(k)] = {"done": bool(e.get("done", false)), "best": float(e.get("best", -1.0)), "deaths": int(e.get("deaths", 0))}
+	if txt == "":
+		return p
+	var j := JSON.new()
+	if j.parse(txt) != OK:
+		return p
+	var d: Variant = j.data
+	if typeof(d) != TYPE_DICTIONARY:
+		return p
+	p.total_deaths = maxi(0, _num(d.get("total_deaths", 0), 0))
+	var lv: Variant = d.get("levels", {})
+	if typeof(lv) != TYPE_DICTIONARY:
+		return p
+	for k in lv:
+		var e: Variant = lv[k]
+		if typeof(e) != TYPE_DICTIONARY:
+			continue
+		p.levels[str(k)] = {"done": typeof(e.get("done")) == TYPE_BOOL and e.get("done"), "best": float(_num(e.get("best", -1.0), -1.0, true)), "deaths": maxi(0, _num(e.get("deaths", 0), 0))}
 	return p
+
+
+static func _num(v: Variant, fallback: Variant, as_float: bool = false) -> Variant:
+	if typeof(v) != TYPE_INT and typeof(v) != TYPE_FLOAT:
+		return fallback
+	return float(v) if as_float else int(v)
 
 
 func save() -> void:

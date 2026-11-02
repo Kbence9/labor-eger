@@ -34,6 +34,19 @@ Kísérleti egér egy kézzel rajzolt labirintusban: semmi magyarázat, sok hal�
 - Halál: piros X marad a helyén (az adott pályán), a pálya teljesen visszaáll.
 - Számlálók: idő (pályánként, halálokon át), halál.
 - **Alany sorszáma** globális: az eddigi összes halál + 1 (minden halál egy új alany). A haladás az eszközön: `user://progress.json` (teljesített pályák, legjobb idő, halálok pályánként és összesen).
+- **Legjobb idő (rekord):** játék közben a HUD-on az időmérő alatt („Rekord: 0:12.3”), a győzelmi lapon pedig: első mért idő / „Új rekord! Az előző: …” (pirossal) / „Rekord: … (+x mp)”.
+- **Véletlen labirintus** (főmenü): seedből generált pálya három nehézségi szinttel, `RandomMaze` (`scripts/core/random_maze.gd`). Ugyanaz a szint + seed mindig ugyanazt a pályát adja.
+
+| Szint | Méret | Hurkok | Sajt-csapda |
+|---|---|---|---|
+| Könnyű | 5×6 | 10% | 0 |
+| Közepes | 7×9 | 6% | 2 |
+| Nehéz | 10×13 | 3% | 5 |
+
+- Start a labirintus egyik „végén”, a Kijárat a tőle legtávolabbi cellában (két szélességi keresés). A csapdák zsákutcák végére kerülnek, így sosem állják el a megoldást.
+- **A nap labirintusa:** Közepes, seed = a mai dátum (ÉÉÉÉHHNN), mindenkinek ugyanaz.
+- A győzelmi lapon „Új labirintus” (új seed, ugyanaz a szint). A halálok beszámítanak az alany sorszámába. Haladás-kulcs: `veletlen:<szint>` (szintenkénti rekord), ill. `napi:<seed>`.
+- **Hibás bemenet:** a beillesztett / kézzel írt pálya-JSON hibás bejegyzéseit (él, cella, útvonal) a betöltő kihagyja és hibaként jelzi; a 4–12 × 4–16-on kívüli vagy hibás méretű pályát elutasítja. A sérült `progress.json` nem dönti el a játékot: ami értelmezhető, megmarad.
 - Pálya-sorrend: `levels/order.json` (fájlnevek listája); ami nincs benne, a végére kerül név szerint. Telefonon a sorrend `user://levels/order.json`-ba ment.
 
 ## Látvány: „Labornapló” (eldöntve, 2026-10-04)
@@ -56,7 +69,7 @@ A betűk SIL OFL / Apache 2.0 licencűek (`assets/fonts/`), latin + magyar karak
 
 ## Képernyők
 - **Nyitó animáció** (~6 mp, koppintásra átugorható): füzetlap és margó → írógépes fejléc → golyóstoll megrajzolja a labirintust → start/kijárat nyíl, sajt → az egér végigfut és kijut… → a LABOR EGÉR pecsét rácsap, az egér piros lenyomata a pecsét szélén marad → „Alany #0: kijutott. Majdnem.” → előtűnik a menü.
-- **Főmenü** ugyanazon a lapon: fejléc (következő kísérlet száma, alany sorszáma), pecsét, a labirintusban bolyongó egér (néha megkóstolja a sajtot: piros X), menü: *Kísérlet indítása/folytatása* (a következő nem teljesített pálya), *Pályák*, *Pályaszerkesztő*; lent az elhunyt alanyok száma (5-től strigulával).
+- **Főmenü** ugyanazon a lapon: fejléc (következő kísérlet száma, alany sorszáma), pecsét, a labirintusban bolyongó egér (néha megkóstolja a sajtot: piros X), menü: *Kísérlet indítása/folytatása* (a következő nem teljesített pálya), *Pályák* és *Véletlen labirintus* (egy sorban; szintválasztó ablak + a nap labirintusa), *Pályaszerkesztő*; lent az elhunyt alanyok száma (5-től strigulával).
 - **Pályák**: tartalomjegyzék sorszámmal, pipával és legjobb idővel; a következő pálya kiemelve.
 - **Pályaszerkesztő**: lásd README.
 - Vissza: Esc / Android vissza gomb.

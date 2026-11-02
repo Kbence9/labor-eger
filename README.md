@@ -12,7 +12,23 @@ a játékos halálokon keresztül tanul. Mobilra (Android, később iOS) és web
 
 1. Indítsd a **sima** Godot 4.7-et (nem a .NET/C# verziót). Letölthető innen: <https://godotengine.org/download>.
 2. Import → válaszd ki ezt a mappát (`project.godot`).
-3. F5: nyitó animáció (koppintásra átugorható), utána főmenü → **Kísérlet indítása** / **Pályák** / **Pályaszerkesztő**.
+3. F5: nyitó animáció (koppintásra átugorható), utána főmenü → **Kísérlet indítása** / **Pályák** / **Véletlen labirintus** / **Pályaszerkesztő**.
+
+Irányítás: húzd az ujjad (swipe) vagy nyilak / WASD; **R** újrakezdés, **Esc** / Android vissza gomb: vissza.
+
+## Újdonságok (2026-11)
+
+- **Véletlen labirintus nehézségi szintekkel:** főmenü → *Véletlen labirintus* → Könnyű (5×6) / Közepes (7×9, 2 sajt-csapda) / Nehéz (10×13, 5 csapda).
+  Minden pálya seedből készül (a címben látszik, pl. „Nehéz #4242”), ugyanaz a seed ugyanazt a pályát adja. A győzelmi lapon **Új labirintus**.
+- **A nap labirintusa:** a mai dátum a seed, így ma mindenkinek ugyanaz a pálya.
+- **Rekord (legjobb idő):** játék közben az időmérő alatt, a győzelmi lapon pedig „Új rekord!” vagy a különbség a rekordhoz. A véletlen labirintusnál szintenként külön rekord. Az eszközön tárolódik (`user://progress.json`; weben a böngésző tárhelyén).
+- **Javítások:** hibás pálya-JSON beillesztése nem omlik össze (a hibás sorokat kihagyja és jelzi, a rossz méretűt elutasítja); sérült `progress.json` nem dönti el a játékot; győzelem után gyorsan indított új pályára nem ugrik fel a régi győzelmi lap.
+
+| Főmenü | Véletlen labirintus | Győzelem rekorddal |
+|---|---|---|
+| ![Főmenü](docs/screenshots/fomenu.png) | ![Szintválasztó](docs/screenshots/veletlen_menu.png) | ![Győzelmi lap](docs/screenshots/veletlen_gyozelem.png) |
+
+Képernyőképek: `docs/screenshots/` (a füsttesztből: `user://shots/`, Linuxon `~/.local/share/godot/app_userdata/Labor Egér/shots/`).
 
 ## Pályaszerkesztő
 
@@ -35,21 +51,26 @@ labirintus generálása (minden nyomásra új), minden él fal / nyitott, másol
 
 ## Tesztek
 
+Godot 4.7 kell a PATH-on (`godot`; Windows-on a letöltött `Godot_v4.7-stable_win64.exe` is jó, ugyanezekkel a kapcsolókkal).
+
 ```
-godot --headless --path . -s tests/test_core.gd     # minden pálya érvényes és megoldható
-xvfb-run godot --path . --resolution 720x1280 -s tests/smoke.gd   # végigjátszás + szerkesztő, képernyőképekkel
+godot --headless --path . --import                   # első futtatás előtt (osztálynevek, betűk importja)
+godot --headless --path . -s tests/test_core.gd     # pályák, megoldó, generátor, véletlen labirintus, hibás bemenetek
+xvfb-run godot --path . --resolution 720x1280 -s tests/smoke.gd   # végigjátszás + véletlen labirintus + szerkesztő, képernyőképekkel
 ```
+
+Mindkettő `FAILS=0`-t ír és 0-val lép ki, ha minden rendben. A füstteszt képei a `user://shots/` mappába kerülnek.
 
 ## Mappák
 
 ```
 scenes/        Godot jelenetek (.tscn) – a UI kódból épül
 tests/         headless és füsttesztek
-scripts/core/  tiszta játéklogika, Node-független (pálya, lépés, megoldó)
+scripts/core/  tiszta játéklogika, Node-független (pálya, lépés, megoldó, generátor, véletlen labirintus)
 scripts/game/  jelenetekhez kötött kód (rajzolás, input, UI, hang)
 levels/        pályák JSON-ban (formátum: docs/GDD.md) + order.json (sorrend)
 assets/        betűk (licencekkel), később hangok
 tools/         segédszkriptek (pl. pálya-ellenőrző)
 prototype/     a webes prototípus referenciának
-docs/          terv és ütemezés
+docs/          terv és ütemezés; docs/screenshots/ képernyőképek a README-hez
 ```

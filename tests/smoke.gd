@@ -8,10 +8,29 @@ extends SceneTree
 var shots := "user://shots/"
 var main: Node
 var fails := 0
+var guard: Logger = preload("res://tests/error_guard.gd").new()
+var t_total := 0.0
+const TIME_LIMIT := 600.0
 
 
 func _initialize() -> void:
+	OS.add_logger(guard)
 	_run.call_deferred()
+
+
+## Őr: script-hibánál vagy időtúllépésnél azonnal 1-es kóddal kilép (különben a megszakadt
+## korutin miatt a quit() sosem futna le, és a folyamat a CI időkorlátjáig lógna).
+func _process(delta: float) -> bool:
+	t_total += delta
+	if guard.count > 0:
+		print("HIBA  script-hiba a füstteszt közben: %s" % guard.first)
+		print("FAILS=%d" % (fails + 1))
+		quit(1)
+	elif t_total > TIME_LIMIT:
+		print("HIBA  a füstteszt nem ért véget %d mp alatt" % int(TIME_LIMIT))
+		print("FAILS=%d" % (fails + 1))
+		quit(1)
+	return false
 
 
 func _frames(n: int) -> void:
@@ -31,6 +50,15 @@ func _ok(cond: bool, msg: String) -> void:
 	print(("OK    " if cond else "HIBA  ") + msg)
 	if not cond:
 		fails += 1
+
+
+## A host alatti első gomb megnyomása, amelynek felirata így kezdődik.
+func _press_in(host: Node, prefix: String) -> void:
+	for b in host.find_children("*", "Button", true, false):
+		if (b as Button).text.begins_with(prefix):
+			(b as Button).pressed.emit()
+			return
+	_ok(false, "nincs „%s” gomb" % prefix)
 
 
 ## A futó pályát végigjátssza a megoldóval (ahol épp az egér áll).
@@ -121,9 +149,30 @@ func _run() -> void:
 	main.show_random_menu()
 	await _frames(5)
 	await _shot("13_veletlen_menu")
-	for c in main.title.ui_root().get_children():
-		if c.get_class() == "Control":
-			c.queue_free()
+	# seed kézi megadása: hibás bevitelnél a menü nyitva marad és hibát ír, jó seednél ugyanaz a pálya
+	var menu: Control = main.random_menu
+	main.seed_edit.text = "abc"
+	_press_in(menu, "Nehéz")
+	await _frames(3)
+	_ok(is_instance_valid(menu) and not menu.is_queued_for_deletion() and main.seed_error.visible and main.seed_error.text.begins_with("A seed csak"), "hibás seed: hibaüzenet, a menü nyitva (%s)" % main.seed_error.text)
+	await _shot("13b_veletlen_hibas_seed")
+	main.seed_edit.text = "4242"
+	main.seed_edit.text_changed.emit("4242")
+	_ok(not main.seed_error.visible, "gépeléskor a hibaüzenet eltűnik")
+	_press_in(menu, "Nehéz")
+	await _frames(5)
+	_ok(not is_instance_valid(menu) or menu.is_queued_for_deletion(), "jó seed: a menü bezárul")
+	_ok(main.game.visible and main._random.get("seed", 0) == 4242 and JSON.stringify(main.game.level.to_dict()) == JSON.stringify(RandomMaze.build("nehez", 4242).to_dict()), "beírt seed 4242: ugyanaz a Nehéz pálya (%s)" % main.game.level.title)
+	main.show_title(false)
+	await _frames(3)
+	main.show_random_menu()
+	await _frames(3)
+	main.seed_edit.text = ""
+	_press_in(main.random_menu, "Könnyű")
+	await _frames(3)
+	_ok(main.game.visible and main._random["diff"] == "konnyu" and main._random["seed"] >= 1, "üres seed-mező: véletlen seed (%d)" % main._random["seed"])
+	main.show_title(false)
+	await _frames(3)
 	for diff in RandomMaze.ORDER:
 		main.play_random(diff, 4242)
 		await _frames(5)

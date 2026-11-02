@@ -163,8 +163,9 @@ static func margin(child: Control, l: int, t: int, r: int, b: int) -> MarginCont
 
 
 ## Modális ablak (cetli a lap közepén). options: [[felirat, Callable, kind], ...]
-## Bármelyik gomb bezárja az ablakot, utána hívja a callable-t.
-static func modal(host: Control, title: String, text: String, options: Array) -> Control:
+## Gombnyomásra hívja a callable-t, utána bezárja az ablakot – kivéve, ha a callable false-t ad vissza
+## (pl. hibás bevitel: az ablak nyitva marad). extra: a szöveg és a gombok közé kerülő vezérlők.
+static func modal(host: Control, title: String, text: String, options: Array, extra: Array = []) -> Control:
 	var root := full_rect(Control.new())
 	root.theme = theme()
 	root.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -186,15 +187,17 @@ static func modal(host: Control, title: String, text: String, options: Array) ->
 		var p := label(text, 28, BoardPainter.INK_SOFT)
 		p.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		v.add_child(p)
+	for x in extra:
+		v.add_child(x)
 	for o in options:
 		var cb: Callable = o[1]
 		var kind: String = o[2] if o.size() > 2 else "ink"
 		var b := button(o[0], Callable(), kind)
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT if kind == "text" else HORIZONTAL_ALIGNMENT_CENTER
 		var close := func() -> void:
-			root.queue_free()
-			if cb.is_valid():
-				cb.call()
+			var res: Variant = cb.call() if cb.is_valid() else null
+			if not (typeof(res) == TYPE_BOOL and res == false):
+				root.queue_free()
 		b.pressed.connect(close)
 		v.add_child(b)
 	host.add_child(root)
